@@ -72,7 +72,7 @@ export const attachCookiesToResponse = async (
     expires: new Date(Date.now() + oneDay),
     secure: process.env.NODE_ENV === 'production',
     signed: true,
-    sameSite: 'none',
+    // sameSite: 'none',
   });
   // console.log(value.req.signedCookies.accessToken)
 };

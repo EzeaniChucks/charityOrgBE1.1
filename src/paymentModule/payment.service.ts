@@ -1354,38 +1354,34 @@ export class PaymentService {
   }) {
     try {
       // const user = await this.User.findOne({ _id: '65c681387a7de5645968486f' });
-      // const user = await this.User.findOne({ _id: userId });
-      // if (!user) {
-      //   return res
-      //     .status(400)
-      //     .json({ msg: 'unauthorized access', payload: 'User dos not exist' });
-      // }
+      const user = await this.User.findOne({ _id: userId });
+      if (!user) {
+        return res
+          .status(400)
+          .json({ msg: 'unauthorized access', payload: 'User dos not exist' });
+      }
 
-      // if (!user?.paystack_customer_code) {
-      //   return res.status(400).json({
-      //     msg: 'unsuccesful',
-      //     payload: 'No paystack customer code created yet',
-      //   });
-      // }
+      if (!user?.paystack_customer_code) {
+        return res.status(400).json({
+          msg: 'unsuccesful',
+          payload: 'No paystack customer code created yet',
+        });
+      }
       // console.log(user.paystack_customer_code);
-      // const url = `https://api.paystack.co/customer/${user?.paystack_customer_code}/identification`;
-      const url = `https://api.paystack.co/customer/${'CUS_ewxp4jeonx7lnfb'}/identification`;
+      const url = `https://api.paystack.co/customer/${user?.paystack_customer_code}/identification`;
+      // const url = `https://api.paystack.co/customer/${'CUS_ewxp4jeonx7lnfb'}/identification`;
       const body = {
         country: 'NG',
-        // country: 'NG',
         type: 'bank_account',
-        // account_number: '0037497074',
         account_number,
-        // bvn: '22177327049',
         bvn,
-        // bank_code: '058',
         bank_code,
-        first_name: 'Uchenna',
-        // first_name: user?.firstName,
-        last_name: 'Okoro',
-        // last_name: user?.lastName,
+        // first_name: 'Uchenna',
+        first_name: user?.firstName,
+        // last_name: 'Okoro',
+        last_name: user?.lastName,
       };
-      // console.log(body);
+      console.log(body);
       const options = {
         method: 'POST',
         url,
