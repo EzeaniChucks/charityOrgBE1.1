@@ -1287,6 +1287,56 @@ export class PaymentService {
     }
   }
 
+  async createTestCustomer(res: Response) {
+    try {
+      const url = `https://api.paystack.co/customer`;
+      const options = {
+        method: 'POST',
+        url,
+        headers: {
+          Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+          'content-type': 'application/json',
+          'cache-control': 'no-cache',
+        },
+        body: {
+          email: 'concord_chucks2@yahoo.com',
+          first_name: 'Uchenna',
+          last_name: 'Okoro',
+          phone: '+2348067268692',
+        },
+        json: true,
+      };
+
+      request(options, async (error: any, response: any) => {
+        if (error) {
+          return res.status(400).json({
+            msg: `Something went wrong with Paystack's API`,
+            payload: error,
+          });
+        }
+        const result = response.body;
+        // console.log(result);
+        // console.log(result.data);
+
+        if (result.status === 'error') {
+          return res.status(400).json({
+            msg: 'error status',
+            payload: result,
+          });
+        }
+        try {
+          return res.status(200).json({
+            msg: 'successful',
+            payload: result,
+          });
+        } catch (err) {
+          return res
+            .status(500)
+            .json({ payload: 'server error', msg: err.message });
+        }
+      });
+    } catch (err) {}
+  }
   async payStackBVNIdentityValidation({
     userId,
     // country,
@@ -1304,21 +1354,38 @@ export class PaymentService {
   }) {
     try {
       // const user = await this.User.findOne({ _id: '65c681387a7de5645968486f' });
-      const user = await this.User.findOne({ _id: userId });
-      if (!user) {
-        return res
-          .status(400)
-          .json({ msg: 'unauthorized access', payload: 'User dos not exist' });
-      }
+      // const user = await this.User.findOne({ _id: userId });
+      // if (!user) {
+      //   return res
+      //     .status(400)
+      //     .json({ msg: 'unauthorized access', payload: 'User dos not exist' });
+      // }
 
-      if (!user?.paystack_customer_code) {
-        return res.status(400).json({
-          msg: 'unsuccesful',
-          payload: 'No paystack customer code created yet',
-        });
-      }
+      // if (!user?.paystack_customer_code) {
+      //   return res.status(400).json({
+      //     msg: 'unsuccesful',
+      //     payload: 'No paystack customer code created yet',
+      //   });
+      // }
       // console.log(user.paystack_customer_code);
-      const url = `https://api.paystack.co/customer/${user?.paystack_customer_code}/identification`;
+      // const url = `https://api.paystack.co/customer/${user?.paystack_customer_code}/identification`;
+      const url = `https://api.paystack.co/customer/${'CUS_ewxp4jeonx7lnfb'}/identification`;
+      const body = {
+        country: 'NG',
+        // country: 'NG',
+        type: 'bank_account',
+        // account_number: '0037497074',
+        account_number,
+        // bvn: '22177327049',
+        bvn,
+        // bank_code: '058',
+        bank_code,
+        first_name: 'Uchenna',
+        // first_name: user?.firstName,
+        last_name: 'Okoro',
+        // last_name: user?.lastName,
+      };
+      // console.log(body);
       const options = {
         method: 'POST',
         url,
@@ -1327,21 +1394,7 @@ export class PaymentService {
           'content-type': 'application/json',
           'cache-control': 'no-cache',
         },
-        body: {
-          country: 'NG',
-          // country: 'NG',
-          type: 'bank_account',
-          // account_number: '0037497074',
-          account_number,
-          // bvn: '22177327049',
-          bvn,
-          // bank_code: '058',
-          bank_code,
-          // first_name: 'Ezeani',
-          first_name: user?.firstName,
-          // last_name: 'Chukwudi',
-          last_name: user?.lastName,
-        },
+        body,
         json: true,
       };
 
@@ -1356,13 +1409,11 @@ export class PaymentService {
         if (result.status === false) {
           return res.status(400).json({ msg: result?.message });
         }
-        return res
-          .status(200)
-          .json({
-            msg: 'successful',
-            payload:
-              'Your bank validation is underway. Check your in-app notification for the status',
-          });
+        return res.status(200).json({
+          msg: 'successful',
+          payload:
+            'Your bank validation is underway. Check your in-app notification for the status',
+        });
       });
     } catch (err) {
       return res.status(500).json({ msg: err.message });
@@ -1370,8 +1421,8 @@ export class PaymentService {
   }
 
   async paystackBVNValidationWebhookResponse(body: any, res: Response) {
+    console.log(body);
     try {
-      console.log(body);
       const { event, data } = body;
       const { email, identification } = data;
       if (event === 'customeridentification.success') {
@@ -1414,7 +1465,9 @@ export class PaymentService {
 
       return res.send(200);
     } catch (err) {
-      return res.status(500).json({ msg: err.message });
+      console.log(err);
+      // return res.status(500).json({ msg: err.message });
+      return res.send(500);
     }
   }
 

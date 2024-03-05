@@ -266,6 +266,13 @@ export class PaymentController {
     return this.paymentservice.payStackGetBanks(country, response);
   }
 
+  @Get('paystack_create_test_customer')
+  @ApiTags('Payment')
+  async createTestCustomer(@Res() res: Response) {
+    // const { userId } = param;
+    return this.paymentservice.createTestCustomer(res);
+  }
+
   @Get('get_paystack_customer_list/:userId')
   @ApiTags('Payment')
   async getPayStackCustomerList(
@@ -313,6 +320,7 @@ export class PaymentController {
     @Body() body: any,
     @Res() res: Response,
   ) {
+    console.log(body);
     return await this.paymentservice.paystackBVNValidationWebhookResponse(
       body,
       res,
