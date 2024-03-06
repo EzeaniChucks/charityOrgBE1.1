@@ -20,6 +20,7 @@ import {
   FiatExchangeRateINAPPDTO,
   FlListenToBankTranferDTO,
   PayStackBVNIdentityValidationDTO,
+  PayStackBVNValidationResponseDTO,
   PayStackCreateChargeDTO,
   PayStackUpdateCustomerDTO,
   PaystackValidateBankAccountDTO,
@@ -317,10 +318,11 @@ export class PaymentController {
   @Post('paystack_bvn_validation_webhook_response')
   @ApiTags('Payment')
   async paystackBVNValidationWebhookResponse(
-    @Body() body: any,
+    @Body()
+    body: PayStackBVNValidationResponseDTO,
     @Res() res: Response,
   ) {
-    console.log(body);
+    // console.log(body);
     return await this.paymentservice.paystackBVNValidationWebhookResponse(
       body,
       res,

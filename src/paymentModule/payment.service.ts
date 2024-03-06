@@ -1051,7 +1051,7 @@ export class PaymentService {
             .status(400)
             .json({ msg: `Something went wrong with Paystack's API` });
         }
-        // console.log(response.body);
+        console.log(response.body);
         const result = response.body;
         if (result.status === 'error') {
           return res
@@ -1354,7 +1354,10 @@ export class PaymentService {
   }) {
     try {
       // const user = await this.User.findOne({ _id: '65c681387a7de5645968486f' });
-      const user = await this.User.findOne({ _id: userId });
+      const user = await this.User.findOneAndUpdate(
+        { _id: userId },
+        { $set: { accountTempInfo: { account_number, bvn } } },
+      );
       if (!user) {
         return res
           .status(400)
@@ -1381,7 +1384,7 @@ export class PaymentService {
         // last_name: 'Okoro',
         last_name: user?.lastName,
       };
-      console.log(body);
+      // console.log(body);
       const options = {
         method: 'POST',
         url,
@@ -1417,53 +1420,64 @@ export class PaymentService {
   }
 
   async paystackBVNValidationWebhookResponse(body: any, res: Response) {
-    console.log(body);
+    // console.log(body);
     try {
       const { event, data } = body;
       const { email, identification } = data;
+      const user = await this.User.findOne({email})
+      
       if (event === 'customeridentification.success') {
-        const user = await this.User.findOneAndUpdate(
-          { email },
-          {
-            accountBankCode: identification?.bank_code,
-            accountNumber: identification?.account_number,
-            accountBankVerified: true,
-          },
-          { new: true },
-        );
-
-        await this.notificationservice.logSingleNotification(
-          'Your account information is now verified',
-          user._id,
-          '65c681387a7de5645968486f',
-          `${process.env.FRONT_END_CONNECTION}/user/${user._id}`,
-          'account_verification',
-        );
-      }
-
-      if (event === 'customeridentification.failure') {
-        const user = await this.User.findOneAndUpdate(
+        const updateduser = await this.User.findOneAndUpdate(
           { email },
           {
             $inc: { accountBankVerificationAttempts: 1 },
+            $set: {
+              accountBankCode: identification?.bank_code,
+              accountNumber: user?.accountTempInfo?.account_number,
+              bvn: user?.accountTempInfo?.bvn,
+              accountBankVerified: true,
+            },
           },
           { new: true },
         );
 
         await this.notificationservice.logSingleNotification(
-          'Your bank account verification failed',
-          user._id,
+          'Your bank account information is now verified',
+          updateduser._id,
           '65c681387a7de5645968486f',
-          `${process.env.FRONT_END_CONNECTION}/user/${user._id}`,
+          `${process.env.FRONT_END_CONNECTION}/user/${updateduser._id}`,
           'account_verification',
         );
+        return res.sendStatus(200);
       }
 
-      return res.send(200);
+      if (event === 'customeridentification.failure') {
+        const updateduser = await this.User.findOneAndUpdate(
+          { email },
+          {
+            $inc: { accountBankVerificationAttempts: 1 },
+            $set: {
+              accountBankCode: '',
+              accountNumber: '',
+              bvn: '',
+              accountBankVerified: false,
+            },
+          },
+          { new: true },
+        );
+
+        await this.notificationservice.logSingleNotification(
+          `Your bank account verification failed: ${data?.reason}`,
+          updateduser?._id,
+          '65c681387a7de5645968486f',
+          `${process.env.FRONT_END_CONNECTION}/user/${updateduser?._id}`,
+          'account_verification',
+        );
+        return res.sendStatus(200);
+      }
     } catch (err) {
       console.log(err);
-      // return res.status(500).json({ msg: err.message });
-      return res.send(500);
+      return res.sendStatus(500);
     }
   }
 
@@ -1493,6 +1507,7 @@ export class PaymentService {
         }
 
         const result = response?.body;
+        console.log(result)
         if (result.status === 'error' || result.status === false) {
           return res.status(400).json({
             msg: 'Incorrect bank details. Please recheck that details supplied are right. Or contact customer support',

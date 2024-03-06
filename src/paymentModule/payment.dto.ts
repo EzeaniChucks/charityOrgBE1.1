@@ -136,6 +136,47 @@ export class PayStackBVNIdentityValidationDTO {
   })
     bank_code:string;
 }
+export class PayStackBVNValidationResponseDTO {
+  @ApiProperty({
+    example: 'mongooseGeneratedId',
+    description: `User's mongoose id after creation`,
+  })
+  userId: string;
+
+  @ApiProperty({
+    example: 'customeridentification.success',
+    description: `Paystack event description. Enums include customeridentification.success, customeridentification.failure, customeridentification.pending`,
+  })
+  event: string;
+
+  @ApiProperty({
+    example: {
+      customer_id: 161058616,
+      customer_code: 'CUS_ewxp4jeonx7lnfb',
+      email: 'concord_chucks2@yahoo.com',
+      identification: {
+        country: 'NG',
+        type: 'bank_account',
+        bvn: '221*****049',
+        account_number: '003****074',
+        bank_code: '058',
+      },
+    },
+    description: `Paystack webhook response to bvn validation`,
+  })
+  data: {
+    customer_id: number;
+    customer_code: string;
+    email: string;
+    identification: {
+      country: string;
+      type: string;
+      bvn: string;
+      account_number: string;
+      bank_code: string;
+    };
+  };
+}
 
 export class PayStackUpdateCustomerDTO {
   @ApiProperty({
