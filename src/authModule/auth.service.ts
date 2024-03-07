@@ -135,12 +135,13 @@ export class AuthService {
     //cookie name must be same with normal session cookie.
     //just so it gets replaced
     try{
+      
       res.cookie('accessToken', 'logout', {
         httpOnly: true,
         expires: new Date(Date.now()),
         secure: process.env.NODE_ENV === 'production',
         signed: true,
-        sameSite: 'none',
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
       });
       return res.status(200).json({ msg: 'User logged out' });
     }catch(err){
