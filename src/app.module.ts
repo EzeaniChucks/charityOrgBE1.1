@@ -62,10 +62,6 @@ export class AppModule implements NestModule {
       .apply(PaymentsChecker)
       .exclude(
         {
-          path: 'paystack_bvn_identity_validation',
-          method: RequestMethod.POST,
-        },
-        {
           path: 'paystack_bvn_validation_webhook_response',
           method: RequestMethod.POST,
         },
@@ -75,7 +71,19 @@ export class AppModule implements NestModule {
         },
       )
       .forRoutes(PaymentController);
-    consumer.apply(EventsChecker).forRoutes(EventsController);
+        consumer
+          .apply(EventsChecker)
+          .exclude(
+            {
+              path: 'get_all_events',
+              method: RequestMethod.GET,
+            },
+            {
+              path: '/get_single_event/:eventId',
+              method: RequestMethod.GET,
+            },
+          )
+          .forRoutes(EventsController);
     consumer.apply(AdminChecker).forRoutes(AdminSettingsController);
     consumer.apply(VirtualCardsChecker).forRoutes(VirtualCardController);
   }
