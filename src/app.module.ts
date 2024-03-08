@@ -82,6 +82,10 @@ export class AppModule implements NestModule {
               path: '/get_single_event/:eventId',
               method: RequestMethod.GET,
             },
+            {
+              path: '/event_creator_details/:creatorId',
+              method: RequestMethod.GET,
+            },
           )
           .forRoutes(EventsController);
     consumer.apply(AdminChecker).forRoutes(AdminSettingsController);
