@@ -258,6 +258,18 @@ export class PaymentController {
     return this.paymentservice.payStackPaymentResponse(reference, response);
   }
 
+  @Get('paystack_charity_fund_response')
+  @ApiTags('Payment')
+  payStackCharityFundingResponse(
+    @Query('reference') reference: string,
+    @Res() response: Response,
+  ) {
+    return this.paymentservice.payStackCharityFundingResponse(
+      reference,
+      response,
+    );
+  }
+
   @Get('paystack_get_banks')
   @ApiTags('Payment')
   payStackGetBanks(

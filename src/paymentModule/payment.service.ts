@@ -1148,6 +1148,126 @@ export class PaymentService {
       return res.status(500).json({ msg: err.message });
     }
   }
+  async payStackCharityFundingResponse(reference: string, res: Response) {
+    //for both card and bank payments. All that most required is the uniquely generated transaction reference
+    try {
+      const url = `https://api.paystack.co/transaction/verify/${reference}`;
+      const options = {
+        method: 'GET',
+        url,
+        headers: {
+          Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+          'content-type': 'application/json',
+          'cache-control': 'no-cache',
+        },
+        json: true,
+      };
+
+      request(options, async (error: any, response: any) => {
+        if (error) {
+          return res
+            .status(400)
+            .json({ msg: `Something went wrong with Paystack's API` });
+        }
+
+        const result = response.body;
+        // console.log(result);
+        if (result?.status === 'error') {
+          return res.status(400).json({
+            msg:
+              result?.message ||
+              'There was an error from paystack. Please try again.',
+          });
+        }
+        if (result?.data?.status === 'success') {
+          const {
+            id,
+            status,
+            amount,
+            reference: ref,
+            currency,
+            metadata,
+          } = result.data;
+
+          const {
+            eventId,
+            userId,
+            userName,
+            actualName,
+            note,
+            email,
+            phone_number,
+          } = metadata?.customer;
+          const transactionExists = await this.transaction.findOne({
+            transactionId: id,
+          });
+
+          if (transactionExists) {
+            return res.status(400).json({
+              msg: 'Transaction already handled',
+            });
+          }
+
+          // await this.validateUserWallet(user._id);
+          const event = await this.event.findOneAndUpdate(
+            { _id: eventId },
+            {
+              $push: {
+                contributors: {
+                  userId,
+                  name: userName,
+                  actualName,
+                  note,
+                  amount: amount,
+                  date: Date.now(),
+                },
+              },
+              $inc: {
+                totalEventAmount: Number(amount)/100,
+              },
+            },
+            { new: true },
+          );
+
+          // const realamount = amount - Number(chargeAmount);
+          if (userId) {
+            await this.createWalletTransactions(
+              userId,
+              status,
+              currency,
+              Number(amount)/100,
+              'Bank Withdraw: Charity Funding',
+              `Charity funding with ${currency} ${amount}`,
+            );
+
+            await this.createTransaction(
+              userId,
+              id,
+              status,
+              currency,
+              Number(amount)/100,
+              {
+                name: actualName,
+                email: email,
+                phone_number,
+              },
+              ref,
+              'Bank Withdraw: Charity Funding',
+              `Charity funding with ${currency} ${amount}`,
+            );
+          }
+
+          // return { msg: 'Wallet funded successfully', balance: result };
+          return res.status(200).json({
+            msg: 'successful',
+            payload: event,
+          });
+        }
+      });
+    } catch (err) {
+      return res.status(500).json({ msg: err?.message });
+    }
+  }
 
   async payStackGetBanks(country: string, res: Response) {
     try {
@@ -1424,8 +1544,8 @@ export class PaymentService {
     try {
       const { event, data } = body;
       const { email, identification } = data;
-      const user = await this.User.findOne({email})
-      
+      const user = await this.User.findOne({ email });
+
       if (event === 'customeridentification.success') {
         const updateduser = await this.User.findOneAndUpdate(
           { email },
@@ -1507,7 +1627,7 @@ export class PaymentService {
         }
 
         const result = response?.body;
-        console.log(result)
+        console.log(result);
         if (result.status === 'error' || result.status === false) {
           return res.status(400).json({
             msg: 'Incorrect bank details. Please recheck that details supplied are right. Or contact customer support',
