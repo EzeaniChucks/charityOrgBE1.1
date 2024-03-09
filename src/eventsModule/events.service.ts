@@ -410,55 +410,65 @@ export class EventsServices {
       throw new InternalServerErrorException({ msg: err.message });
     }
   }
-  async createEvent(files: any, res: Response) {
-    const document = files.find((doc: any) => {
-      return doc.fieldname === 'document';
-    });
-    const image = files.find((doc: any) => {
-      return doc.fieldname === 'image';
-    });
-    fs.writeFile(
-      `${document.originalname}`,
-      document.buffer,
-      'binary',
-      async (err) => {
-        if (err) {
-          return res.status(400).json({ msg: 'Something went wrong' });
-        } else {
-          readFile(`${document.originalname}`, async (err, data) => {
-            if (err) {
-              return res.status(400).json({ msg: 'Something went wrong' });
-            }
-            try {
-              const newevent = await this.event.create(
-                JSON.parse(data.toString()),
-              );
 
-              if (!newevent) {
-                return res
-                  .status(400)
-                  .json({ msg: 'Event could not be created. Try again' });
-              }
+  async createEvent(imagefile: Express.Multer.File, body: any, res: Response) {
+    try{
+      const newevent = await this.event.create(body);
+      const result = await this.cloudinary.uploadImage(imagefile?.buffer);
+      newevent.eventImageName = result.secure_url;
+      await newevent.save();
+      return res.status(200).json({ msg: 'Success', event: newevent });
+      // return res.sendStatus(200);
+    }catch(err){
+      if(err.message.includes(
+      "dup key: { eventName:"
+      )){
+        return res.status(500).json({msg:'Event Name already exists. Please choose a different name for your event'})
+      }
+      return res.status(500).json({msg:err?.message})
+    }
+    // fs.writeFile(
+    //   `${document.originalname}`,
+    //   document.buffer,
+    //   'binary',
+    //   async (err) => {
+    //     if (err) {
+    //       return res.status(400).json({ msg: 'Something went wrong' });
+    //     } else {
+    //       readFile(`${document.originalname}`, async (err, data) => {
+    //         if (err) {
+    //           return res.status(400).json({ msg: 'Something went wrong' });
+    //         }
+    //         try {
+    //           const newevent = await this.event.create(
+    //             JSON.parse(data.toString()),
+    //           );
 
-              if (image) {
-                const result = await this.cloudinary.uploadImage(image);
-                newevent.eventImageName = result.secure_url;
-                await newevent.save();
-                unlink(`${image.originalname}`, () => {});
-              }
-              unlink(`${document.originalname}`, () => {
-                return res
-                  .status(200)
-                  .json({ msg: 'Success', event: newevent });
-              });
-            } catch (err) {
-              return res.status(500).json({ msg: err.message });
-            }
-          });
-        }
-      },
-    );
+    //           if (!newevent) {
+    //             return res
+    //               .status(400)
+    //               .json({ msg: 'Event could not be created. Try again' });
+    //           }
+
+    //           if (imagefile) {
+    //             const result = await this.cloudinary.uploadImage(imagefile);
+    //             newevent.eventImageName = result.secure_url;
+    //             await newevent.save();
+    //           }
+    //           unlink(`${document.originalname}`, () => {
+    //             return res
+    //               .status(200)
+    //               .json({ msg: 'Success', event: newevent });
+    //           });
+    //         } catch (err) {
+    //           return res.status(500).json({ msg: err.message });
+    //         }
+    //       });
+    //     }
+    //   },
+    // );
   }
+
   async addCommentOnEvent(
     eventId: string,
     userName: string,
@@ -677,7 +687,7 @@ export class EventsServices {
       return res.status(500).json({ msg: err.message });
     }
   }
-  
+
   async createOneTimePayment(
     userId: string,
     userName: string,
@@ -786,7 +796,7 @@ export class EventsServices {
       throw new InternalServerErrorException({ msg: err.message });
     }
   }
-  
+
   async createOneTimePledge(
     userId: string,
     userName: string,
@@ -838,7 +848,7 @@ export class EventsServices {
       throw new InternalServerErrorException({ msg: err.message });
     }
   }
-  
+
   async createEscrow({
     amount,
     currency,
@@ -862,23 +872,19 @@ export class EventsServices {
       const event = await this.event.findOne({ _id: eventId });
 
       if (!event) {
-        return res
-          .status(400)
-          .json({
-            msg: 'unsuccessful',
-            payload:
-              'No charity with this id exists. Contact customer support with this error message',
-          });
+        return res.status(400).json({
+          msg: 'unsuccessful',
+          payload:
+            'No charity with this id exists. Contact customer support with this error message',
+        });
       }
 
       //check if escrow creator is also event creator, which shouldn't be.
       if (event?.creatorId?.toString() === userId) {
-        return res
-          .status(400)
-          .json({
-            msg: 'unsuccessful',
-            payload: 'You cannot create an escrow on your own event',
-          });
+        return res.status(400).json({
+          msg: 'unsuccessful',
+          payload: 'You cannot create an escrow on your own event',
+        });
       }
 
       //check if the user has an ongoing escrow.
@@ -937,7 +943,7 @@ export class EventsServices {
       }
       let newEscrowId: string =
         newescrow?.escrow[newescrow?.escrow?.length - 1]?._id?.toString();
-      
+
       //send notif to event creator
       await this.notifservice.logSingleNotification(
         `A user has created an escrow on your event: ${newescrow?.eventName}.`,
@@ -986,7 +992,7 @@ export class EventsServices {
       return res.status(500).json({ msg: err?.message });
     }
   }
-  
+
   async fetchSingleEscrow({
     eventId,
     escrowId,
@@ -1053,7 +1059,7 @@ export class EventsServices {
       return res.status(500).json({ msg: err?.message });
     }
   }
-  
+
   async fetchEscrowParticipantsList({
     escrowId,
     eventId,
@@ -1091,7 +1097,7 @@ export class EventsServices {
       return res.status(500).json({ msg: err?.message });
     }
   }
-  
+
   async inviteEscrowAppointee({
     eventId,
     escrowId,
@@ -1134,8 +1140,14 @@ export class EventsServices {
 
       //make sure event creator is not the same person about to be appointed as third party observer on their own charity
       //I am using the appointerHasPaid object above, since it returns the full event/charity itself
-      if(appointerHasPaid?.creatorId.toString() ===appointeeId){
-        return res.status(400).json({msg:'unsuccessful', payload:'This user owns this charity. You can not appoint charity creators as deciders of escrows on their charities'})
+      if (appointerHasPaid?.creatorId.toString() === appointeeId) {
+        return res
+          .status(400)
+          .json({
+            msg: 'unsuccessful',
+            payload:
+              'This user owns this charity. You can not appoint charity creators as deciders of escrows on their charities',
+          });
       }
 
       //invite user
@@ -1167,7 +1179,7 @@ export class EventsServices {
         appointeeId,
         appointerId,
         `/${eventId}/${userIsInvited?.currency}/amount/${escrowId}`,
-        `escrow_invitation/${userIsInvited?.eventName||'Event Name'}`,
+        `escrow_invitation/${userIsInvited?.eventName || 'Event Name'}`,
       );
       return res
         .status(200)
@@ -1176,7 +1188,7 @@ export class EventsServices {
       return res.status(500).json({ msg: err?.message });
     }
   }
-  
+
   async acceptEscrowInvitation({
     eventId,
     escrowId,
@@ -1239,7 +1251,7 @@ export class EventsServices {
         appointerId,
         appointeeId,
         `/${eventId}/${userAcceptsInvitation?.currency}/amount/${escrowId}`,
-        `escrow_acceptance/${userAcceptsInvitation?.eventName||'Event Name'}`,
+        `escrow_acceptance/${userAcceptsInvitation?.eventName || 'Event Name'}`,
       );
 
       return res
@@ -1249,7 +1261,7 @@ export class EventsServices {
       return res.status(500).json({ msg: err?.message });
     }
   }
-  
+
   async declineEscrowInvitation({
     eventId,
     escrowId,
@@ -1311,7 +1323,7 @@ export class EventsServices {
         appointerId,
         appointeeId,
         `/${eventId}/${userDeclinesInvitation?.currency}/amount/${escrowId}`,
-        `escrow_deletion/${userDeclinesInvitation?.eventName||'Event Name'}`,
+        `escrow_deletion/${userDeclinesInvitation?.eventName || 'Event Name'}`,
       );
 
       return res
@@ -1480,21 +1492,23 @@ export class EventsServices {
 
         //check existing payment form (which could be an empty array) for total amount already paid out to participants
         let totalPayout: number = 0;
-        let paymentform = 
-        event?.escrow
-          .find((eachEscrow: any) => eachEscrow._id.toString() === escrowId)
-          ?.paymentForm;
-          paymentform?.map((eachUser: any) => {
-            totalPayout = totalPayout + Number(eachUser?.amount_received) || 0;
-          });
-        return { amountDonated, totalPayout, paymentformlength:paymentform?.length };
+        let paymentform = event?.escrow.find(
+          (eachEscrow: any) => eachEscrow._id.toString() === escrowId,
+        )?.paymentForm;
+        paymentform?.map((eachUser: any) => {
+          totalPayout = totalPayout + Number(eachUser?.amount_received) || 0;
+        });
+        return {
+          amountDonated,
+          totalPayout,
+          paymentformlength: paymentform?.length,
+        };
       }
 
-      const { totalPayout, amountDonated, paymentformlength } = await totalPtAndAmountDonated(
-        event,
-      );
-      
-      if (paymentformlength>0 && totalPayout === 0) {
+      const { totalPayout, amountDonated, paymentformlength } =
+        await totalPtAndAmountDonated(event);
+
+      if (paymentformlength > 0 && totalPayout === 0) {
         return res.status(400).json({
           msg: 'unsuccessful',
           payload: 'Total payout cannot be zero.',
@@ -1600,7 +1614,6 @@ export class EventsServices {
           }
         });
       }
-    
 
       if (charity?.length > 0) {
         const { amount } = charity[0];
@@ -1645,11 +1658,10 @@ export class EventsServices {
           );
         }
       }
-      
+
       if (normalparticipants?.length > 0) await Promise.all(promises);
-      
+
       //following the above success, check if total payment is equal to amount available on escrow
-      
 
       let appointeeHasDisbursedPayment = await this.event.findOne({
         _id: eventId,
@@ -1679,13 +1691,13 @@ export class EventsServices {
           });
         }
       }
-      
+
       const escrow = appointeeHasDisbursedPayment?.escrow?.find(
         (eachEscrow: any) => {
           return eachEscrow?._id.toString() === escrowId;
         },
-        );
-        
+      );
+
       return res.status(200).json({ msg: 'successful', payload: escrow });
     } catch (err) {
       return res.status(500).json({ msg: err.message });

@@ -12,6 +12,7 @@ import {
   UploadedFiles,
   UseInterceptors,
   Res,
+  UploadedFile,
 } from '@nestjs/common';
 import { EventsServices } from './events.service';
 import {
@@ -44,37 +45,38 @@ import {
 @Controller()
 export class EventsController {
   constructor(private readonly eventservice: EventsServices) {}
-  
+
   @Post('create_event')
   @ApiTags('Events')
-  @UseInterceptors(AnyFilesInterceptor())
+  @UseInterceptors(FileInterceptor('image'))
   createEvent(
-    @UploadedFiles() file: Array<Express.Multer.File>,
+    @UploadedFile() file: Express.Multer.File,
+    @Body() body: any,
     @Res() res: Response,
   ) {
-    console.log(file)
-    if(!file){
-      return res.status(400).json({msg:'unsuccessful', payload:'No file sent'})
+    // console.log(file, body);
+    const { document } = body;
+    if (!file) {
+      return res
+        .status(400)
+        .json({
+          msg: 'unsuccessful',
+          payload: 'Please upload an image to your charity',
+        });
     }
-    return this.eventservice.createEvent(file, res);
+    return this.eventservice.createEvent(file, JSON.parse(document), res);
   }
 
   @Put('add_comment_on_event')
   @ApiTags('Events')
-  addCommmentOnEvent(
-    @Body() body: AddEventCommentDTO,
-    @Res() res: Response,
-  ) {
+  addCommmentOnEvent(@Body() body: AddEventCommentDTO, @Res() res: Response) {
     const { eventId, userName, comment } = body;
     return this.eventservice.addCommentOnEvent(eventId, userName, comment, res);
   }
 
   @Put('edit_comment_on_event')
   @ApiTags('Events')
-  editCommmentOnEvent(
-    @Body() body: EditEventCommentDTO,
-    @Res() res: Response,
-  ) {
+  editCommmentOnEvent(@Body() body: EditEventCommentDTO, @Res() res: Response) {
     const { eventId, commentId, newComment } = body;
     return this.eventservice.editCommentOnEvent(
       eventId,
@@ -190,7 +192,7 @@ export class EventsController {
       res,
     });
   }
-  
+
   //stop here for documentation
   @Get('fetch_all_escrow/:eventId/:userId')
   @ApiTags('Events')
@@ -322,7 +324,7 @@ export class EventsController {
 
   @Get('get_all_events')
   @ApiTags('Events')
-  fetchAllEvents( @Res() res: Response, @Query('eventName') eventName?: string) {
+  fetchAllEvents(@Res() res: Response, @Query('eventName') eventName?: string) {
     return this.eventservice.fetchAllEvents(eventName, res);
   }
 

@@ -5,6 +5,10 @@ export const eventSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     required: [true, 'creator ID must be provided'],
   },
+  creatorName: {
+    type: String,
+    required: [true, 'Creator name must be provided'],
+  },
   eventName: {
     type: String,
     required: [true, 'Event name must be provided'],
@@ -19,7 +23,7 @@ export const eventSchema = new mongoose.Schema({
     required: [true, 'Event privacy must be provided'],
     default: 'Public',
   },
-  timeZone: { type: String, required: [true, 'Time zone must be provided'] },
+  // timeZone: { type: String, required: [true, 'Time zone must be provided'] },
   hostStatus: {
     type: String,
     required: [true, 'Host status must be provided'],
@@ -91,12 +95,12 @@ export const eventSchema = new mongoose.Schema({
         {
           userId: mongoose.Schema.Types.ObjectId,
           amount_received: { type: Number, default: 0 },
-          paid:{type:Boolean, default:false},
+          paid: { type: Boolean, default: false },
           date: { type: Date, default: Date.now() },
         },
       ],
       allParticipants: [mongoose.Schema.Types.ObjectId],
-      eventName:String,
+      eventName: String,
     },
   ],
   totalEventAmount: { type: Number, default: 0 },
