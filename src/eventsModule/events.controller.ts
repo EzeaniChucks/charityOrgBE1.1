@@ -57,12 +57,10 @@ export class EventsController {
     // console.log(file, body);
     const { document } = body;
     if (!file) {
-      return res
-        .status(400)
-        .json({
-          msg: 'unsuccessful',
-          payload: 'Please upload an image to your charity',
-        });
+      return res.status(400).json({
+        msg: 'unsuccessful',
+        payload: 'Please upload an image to your charity',
+      });
     }
     return this.eventservice.createEvent(file, JSON.parse(document), res);
   }
@@ -96,39 +94,28 @@ export class EventsController {
     return this.eventservice.deleteCommentOnEvent(eventId, commentId, res);
   }
 
-  @Post('create_recurrent_payment')
+  //PAYMENTS
+
+  //CRON JOB
+  //card recurrent payment to charity
+  @Get('recurrent_payment_with_card_for_charities_cron')
   @ApiTags('Events')
-  createRecurrentPayment(
-    @Body()
-    body: CreateRecurrentPaymentDTO,
-    @Res() res: Response,
-  ) {
-    const {
-      userId,
-      eventId,
-      actualName,
-      amount,
-      note,
-      frequencyDateUnit,
-      frequencyDateValue,
-      renewalEndDateMs,
-    } = body;
-    return this.eventservice.createRecurrentPayment({
-      userId,
-      eventId,
-      actualName,
-      amount,
-      note,
-      frequencyDateValue,
-      frequencyDateUnit,
-      renewalEndDateMs,
-      res,
-    });
+  async recurrentPaymentWithCardForCharitiesCron(@Res() res: Response) {
+    return this.eventservice.recurrentPaymentWithCardForCharitiesCron(res);
   }
 
+  //CRON JOB
+  //wallet recurrent payment to charity
+  @Get('recurrent_payment_with_wallet_for_charities_cron')
+  @ApiTags('Events')
+  async recurrentPaymentWithWalletForCharitiesCron(@Res() res: Response) {
+    return this.eventservice.recurrentPaymentWithWalletForCharitiesCron(res);
+  }
+
+  //wallet one-time payment to charities
   @Post('create_one_time_payment')
   @ApiTags('Events')
-  createOneTimePayment(
+  createOneTimePaymentToCharity(
     @Body()
     body: CreateOneTimePaymentDTO,
     @Res() res: Response,
@@ -152,6 +139,86 @@ export class EventsController {
       depositAmount,
       res,
     );
+  }
+
+  //wallet recurrent payment to charity
+  @Post('create_recurrent_payment')
+  @ApiTags('Events')
+  createWalletRecurrentPaymentToCharity(
+    @Body()
+    body: CreateRecurrentPaymentDTO,
+    @Res() res: Response,
+  ) {
+    const {
+      userId,
+      eventId,
+      actualName,
+      amount,
+      note,
+      frequencyDateUnit,
+      frequencyDateValue,
+      renewalEndDateMs,
+    } = body;
+    return this.eventservice.createWalletRecurrentPaymentToCharity({
+      userId,
+      eventId,
+      actualName,
+      amount,
+      note,
+      frequencyDateValue,
+      frequencyDateUnit,
+      renewalEndDateMs,
+      res,
+    });
+  }
+
+  //card/transfers one-time charity response
+  @Get('paystack_charity_fund_response')
+  @ApiTags('Events')
+  payStackCharityPaymentResponse(
+    @Query('reference') reference: string,
+    @Res() response: Response,
+  ) {
+    return this.eventservice.payStackCharityPaymentResponse(
+      reference,
+      response,
+    );
+  }
+
+  //card recurrent charity response
+  @Post('create_card_recurrent_charity_payment')
+  @ApiTags('Events')
+  payStackRecurrentCharityPaymentResponse(
+    @Body()
+    body: CreateRecurrentPaymentDTO,
+    @Res() res: Response,
+  ) {
+    // console.log(body);
+    const {
+      cardPaymentRef, //from PayStack successful card payment
+      userId,
+      eventId,
+      actualName,
+      amount,
+      note,
+      email,
+      frequencyDateUnit,
+      frequencyDateValue,
+      renewalEndDateMs,
+    } = body;
+    return this.eventservice.payStackRecurrentCharityPaymentResponse({
+      cardPaymentRef,
+      userId,
+      eventId,
+      email,
+      actualName,
+      amount,
+      note,
+      frequencyDateValue,
+      frequencyDateUnit,
+      renewalEndDateMs,
+      res,
+    });
   }
 
   @Post('create_one_time_pledge')

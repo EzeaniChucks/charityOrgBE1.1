@@ -86,6 +86,22 @@ export class AppModule implements NestModule {
               path: '/event_creator_details/:creatorId',
               method: RequestMethod.GET,
             },
+            {
+              path: '/recurrent_payment_with_card_for_charities_cron',
+              method: RequestMethod.GET,
+            },
+            {
+              path: '/recurrent_payment_with_wallet_for_charities_cron',
+              method: RequestMethod.GET,
+            },
+            {
+              path: '/recurrent_payment_with_card_for_individual_cron',
+              method: RequestMethod.GET,
+            },
+            {
+              path: '/recurrent_payment_with_wallet_for_individual_cron',
+              method: RequestMethod.GET,
+            },
           )
           .forRoutes(EventsController);
     consumer.apply(AdminChecker).forRoutes(AdminSettingsController);

@@ -12,7 +12,7 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import mongoose, { Model } from 'mongoose';
 import * as request from 'request';
 import * as Flutterwave from 'flutterwave-node-v3';
 import * as coinbase from 'coinbase-commerce-node';
@@ -95,7 +95,7 @@ export class PaymentService {
     return walletTransaction;
   }
   async createTransaction(
-    userId: string,
+    userId: string | mongoose.Types.ObjectId,
     id: string,
     status: string,
     currency: string | number,
@@ -1065,6 +1065,7 @@ export class PaymentService {
     }
   }
 
+  //payment response for in-app wallet funding (e.g., on client's dashboard for v1)
   async payStackPaymentResponse(reference: string, res: Response) {
     try {
       const url = `https://api.paystack.co/transaction/verify/${reference}`;
@@ -1146,126 +1147,6 @@ export class PaymentService {
       });
     } catch (err) {
       return res.status(500).json({ msg: err.message });
-    }
-  }
-  async payStackCharityFundingResponse(reference: string, res: Response) {
-    //for both card and bank payments. All that most required is the uniquely generated transaction reference
-    try {
-      const url = `https://api.paystack.co/transaction/verify/${reference}`;
-      const options = {
-        method: 'GET',
-        url,
-        headers: {
-          Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
-          'content-type': 'application/json',
-          'cache-control': 'no-cache',
-        },
-        json: true,
-      };
-
-      request(options, async (error: any, response: any) => {
-        if (error) {
-          return res
-            .status(400)
-            .json({ msg: `Something went wrong with Paystack's API` });
-        }
-
-        const result = response.body;
-        // console.log(result);
-        if (result?.status === 'error') {
-          return res.status(400).json({
-            msg:
-              result?.message ||
-              'There was an error from paystack. Please try again.',
-          });
-        }
-        if (result?.data?.status === 'success') {
-          const {
-            id,
-            status,
-            amount,
-            reference: ref,
-            currency,
-            metadata,
-          } = result.data;
-
-          const {
-            eventId,
-            userId,
-            userName,
-            actualName,
-            note,
-            email,
-            phone_number,
-          } = metadata?.customer;
-          const transactionExists = await this.transaction.findOne({
-            transactionId: id,
-          });
-
-          if (transactionExists) {
-            return res.status(400).json({
-              msg: 'Transaction already handled',
-            });
-          }
-
-          // await this.validateUserWallet(user._id);
-          const event = await this.event.findOneAndUpdate(
-            { _id: eventId },
-            {
-              $push: {
-                contributors: {
-                  userId,
-                  name: userName,
-                  actualName,
-                  note,
-                  amount: Number(amount) / 100,
-                  date: Date.now(),
-                },
-              },
-              $inc: {
-                totalEventAmount: Number(amount) / 100,
-              },
-            },
-            { new: true },
-          );
-
-          // const realamount = amount - Number(chargeAmount);
-          if (userId) {
-            await this.createWalletTransactions(
-              userId,
-              status,
-              currency,
-              Number(amount)/100,
-              'Bank Withdraw: Charity Funding',
-              `Charity funding with ${currency} ${amount}`,
-            );
-
-            await this.createTransaction(
-              userId,
-              id,
-              status,
-              currency,
-              Number(amount)/100,
-              {
-                name: actualName,
-                email: email,
-                phone_number,
-              },
-              ref,
-              'Bank Withdraw: Charity Funding',
-              `Charity funding with ${currency} ${amount}`,
-            );
-          }
-
-          // return { msg: 'Wallet funded successfully', balance: result };
-          return res.status(200).json({
-            msg: 'successful',
-            payload: event,
-          });
-        }
-      });
-    } catch (err) {
-      return res.status(500).json({ msg: err?.message });
     }
   }
 
@@ -1725,6 +1606,7 @@ export class PaymentService {
   }
 
   //IN APP
+  //wallet one-time user transfer
   async transferMoneyToUser(
     userId: string,
     recipientId: string,
@@ -1821,7 +1703,9 @@ export class PaymentService {
       throw new InternalServerErrorException({ msg: err.message });
     }
   }
-  async transferMoneyToUserRecurrent(
+
+  //wallet recurrent user transfer
+  async sendMoneyToUserRecurrent(
     userId: string,
     recipientId: string,
     currency: string,
@@ -1872,7 +1756,9 @@ export class PaymentService {
       //calculate frequency factor
       let frequencyfactor =
         (inappRecurrentEndDateMs - Date.now()) / frequencyDateMilliseconds;
-      //length
+
+      frequencyfactor = Number(frequencyfactor.toFixed(0));
+
       //check if user and recipient are valid
       const user = await this.User.findOne({ _id: userId });
       const recipient = await this.User.findOne({ _id: recipientId });
@@ -1930,7 +1816,7 @@ export class PaymentService {
         'In-app Transaction',
       );
 
-      //The fund the recipient wallet
+      //Then fund the recipient wallet
       await this.increaseWallet(
         recipientId,
         amount,
@@ -1973,13 +1859,18 @@ export class PaymentService {
 
       await this.recurrentPayment.create({
         senderId: userId,
+        senderName: `${user?.firstName} ${user?.lastName}`,
         recipientId,
+        recipientName: `${recipient?.firstName} ${recipient?.lastName}`,
         amount,
         currency,
-        frequencyfactor: frequencyfactor - 1,
+        frequencyfactor: inappRecurrentEndDateMs
+          ? frequencyfactor - 1
+          : Infinity,
         frequencyDateMilliseconds,
         renewalDateMicroSec: Date.now() + frequencyDateMilliseconds,
         type: 'individual',
+        payment_medium: 'wallet',
       });
 
       const result = senderwallet?.currencies?.find((eachCur: any) => {
@@ -1988,6 +1879,658 @@ export class PaymentService {
       return response.status(200).json({ msg: 'successful', balance: result });
     } catch (err) {
       throw new InternalServerErrorException({ msg: err.message });
+    }
+  }
+
+  //card/bank one-time user transfer (response)
+  //CREATE METHOD
+  async payStackOneTimeFundTransferResponse(reference: string, res: Response) {
+    //for both card and bank payments. All that most required is the uniquely generated transaction reference
+    try {
+      const url = `https://api.paystack.co/transaction/verify/${reference}`;
+      const options = {
+        method: 'GET',
+        url,
+        headers: {
+          Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+          'content-type': 'application/json',
+          'cache-control': 'no-cache',
+        },
+        json: true,
+      };
+
+      request(options, async (error: any, response: any) => {
+        if (error) {
+          return res
+            .status(400)
+            .json({ msg: `Something went wrong with Paystack's API` });
+        }
+
+        const result = response.body;
+        // console.log(result);
+        if (result?.status === 'error') {
+          return res.status(400).json({
+            msg:
+              result?.message ||
+              'There was an error from paystack. Please try again.',
+          });
+        }
+        if (result?.data?.status === 'success') {
+          const {
+            id,
+            status,
+            amount,
+            reference: ref,
+            currency,
+            metadata,
+          } = result.data;
+
+          const {
+            eventId,
+            userId,
+            userName,
+            actualName,
+            note,
+            email,
+            phone_number,
+          } = metadata?.customer;
+          const transactionExists = await this.transaction.findOne({
+            transactionId: id,
+          });
+
+          if (transactionExists) {
+            return res.status(400).json({
+              msg: 'Transaction already handled',
+            });
+          }
+
+          // await this.validateUserWallet(user._id);
+          const event = await this.event.findOneAndUpdate(
+            { _id: eventId },
+            {
+              $push: {
+                contributors: {
+                  userId,
+                  name: userName,
+                  actualName,
+                  note,
+                  amount: Number(amount) / 100,
+                  date: Date.now(),
+                },
+              },
+              $inc: {
+                totalEventAmount: Number(amount) / 100,
+              },
+            },
+            { new: true },
+          );
+
+          // const realamount = amount - Number(chargeAmount);
+          if (userId) {
+            await this.createWalletTransactions(
+              userId,
+              status,
+              currency,
+              Number(amount) / 100,
+              'Bank Withdraw: Charity Funding',
+              `Charity funding with ${currency} ${amount / 100}`,
+            );
+
+            await this.createTransaction(
+              userId,
+              id,
+              status,
+              currency,
+              Number(amount) / 100,
+              {
+                name: actualName,
+                email: email,
+                phone_number,
+              },
+              ref,
+              'Bank Withdraw: Charity Funding',
+              `Charity funding with ${currency} ${amount / 100}`,
+            );
+          }
+
+          // return { msg: 'Wallet funded successfully', balance: result };
+          return res.status(200).json({
+            msg: 'successful',
+            payload: event,
+          });
+        }
+      });
+    } catch (err) {
+      return res.status(500).json({ msg: err?.message });
+    }
+  }
+
+  //card recurrent user transfer (response)
+  //CREATE METHOD
+  async payStackRecurrentFundTransferResponse({
+    cardPaymentRef,
+    userId,
+    email,
+    actualName,
+    eventId,
+    amount,
+    note,
+    frequencyDateValue,
+    frequencyDateUnit,
+    renewalEndDateMs,
+    res,
+  }: {
+    cardPaymentRef: string;
+    userId: string;
+    email: string;
+    actualName: string;
+    amount: number;
+    eventId: string;
+    note: string;
+    frequencyDateValue: number;
+    frequencyDateUnit: 'hours' | 'days' | 'weeks' | 'months';
+    renewalEndDateMs: number;
+    res: Response;
+  }) {
+    //check that client passed the right date units
+    if (
+      frequencyDateUnit !== 'hours' &&
+      frequencyDateUnit !== 'days' &&
+      frequencyDateUnit !== 'weeks' &&
+      frequencyDateUnit !== 'months'
+    ) {
+      return res.status(400).json({
+        msg: "Renewal date unit should be 'days', 'weeks' or 'months'",
+      });
+    }
+    //use frequency factor to detemine next withdrawal date, then reduce frq factor by 1.
+    //if frq factor is ZERO, do nothing else
+
+    let frequencyDateMilliseconds: number;
+    if (frequencyDateUnit === 'hours') {
+      frequencyDateMilliseconds = Number(frequencyDateValue) * 60 * 60 * 1000;
+    }
+    if (frequencyDateUnit === 'days') {
+      frequencyDateMilliseconds =
+        Number(frequencyDateValue) * 24 * 60 * 60 * 1000;
+    }
+    if (frequencyDateUnit === 'weeks') {
+      frequencyDateMilliseconds =
+        Number(frequencyDateValue) * 7 * 24 * 60 * 60 * 1000;
+    }
+    if (frequencyDateUnit === 'months') {
+      frequencyDateMilliseconds =
+        Number(frequencyDateValue) * 30 * 24 * 60 * 60 * 1000;
+    }
+    //calculate frequency factor
+    let frequencyfactor = //NaN, if renewalEndDate isn't set
+      (new Date(renewalEndDateMs).valueOf() - Date.now()) /
+      frequencyDateMilliseconds;
+
+    frequencyfactor = Number(frequencyfactor.toFixed(0));
+
+    console.log('frequencyfactor', frequencyfactor);
+
+    try {
+      if (!amount) {
+        return res.status(400).json({
+          msg: 'Provide donation amount',
+        });
+      }
+
+      const url = `https://api.paystack.co/transaction/verify/${cardPaymentRef}`;
+      const options = {
+        method: 'GET',
+        url,
+        headers: {
+          Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+          'content-type': 'application/json',
+          'cache-control': 'no-cache',
+        },
+        json: true,
+      };
+
+      request(options, async (error: any, response: any) => {
+        if (error) {
+          return res
+            .status(400)
+            .json({ msg: `Something went wrong with Paystack's API` });
+        }
+
+        const result = response?.body;
+        if (result?.status === 'error') {
+          return res.status(400).json({
+            msg: 'No bank is found for this particular country code',
+          });
+        }
+        // console.log(result);
+        if (result?.data?.status === 'success') {
+          const {
+            id,
+            status,
+            amount: paystackamount,
+            currency,
+            metadata,
+            customer,
+            authorization,
+          } = result.data;
+          // console.log(paystackamount);
+          try {
+            const transactionExists = await this.transaction.findOne({
+              transactionId: id,
+            });
+            if (transactionExists) {
+              throw new ForbiddenException({
+                msg: 'Transaction already exists',
+              });
+            }
+            const idForVisitor = new mongoose.Types.ObjectId();
+
+            const event = await this.event.findOneAndUpdate(
+              { _id: eventId },
+              {
+                $push: {
+                  contributors: {
+                    userId: userId ? userId : idForVisitor,
+                    name: actualName,
+                    actualName,
+                    note,
+                    amount: Number(paystackamount) / 100,
+                    date: Date.now(),
+                  },
+                },
+                $inc: {
+                  totalEventAmount: Number(paystackamount) / 100,
+                },
+              },
+              { new: true },
+            );
+            // const realamount = amount - Number(chargeAmount);
+            await this.createTransaction(
+              userId ? userId : idForVisitor,
+              id,
+              status,
+              currency,
+              Number(amount) / 100,
+              {
+                name: actualName,
+                email: email,
+                phone_number: metadata?.customer?.phone_number,
+              },
+              cardPaymentRef,
+              'Wallet Top-up',
+              'Paystack Top-up Received',
+            );
+
+            //reduce frequencyfactor by 1, then pass info to recurrenpayment
+            //create recurrent payment object
+            await this.recurrentPayment.create({
+              senderId: userId ? userId : idForVisitor,
+              senderName: actualName || 'Anonymous',
+              eventId,
+              amount: Number(paystackamount) / 100,
+              currency: event?.currency,
+              frequencyfactor: renewalEndDateMs
+                ? Number(frequencyfactor) - 1
+                : Infinity,
+              frequencyDateMilliseconds,
+              renewalDateMicroSec: Date.now() + frequencyDateMilliseconds,
+              type: 'charity',
+              payment_medium: 'card', //enum: card, wallet
+              card_authorization: { ...authorization, email },
+            });
+
+            return res.status(200).json({
+              msg: 'success. Donation successful. Recurrent payment successfully added',
+              payload: event,
+            });
+          } catch (err) {
+            return res.status(500).json({ msg: err?.message });
+          }
+        }
+      });
+    } catch (err) {
+      return res.status(500).json({ msg: err.message });
+    }
+  }
+
+  //CRON JOB
+  //(individual wallet) recurring funding from payer card
+  async recurrentPaymentWithCardForIndividualCron(res: Response) {
+    try {
+      //first find recurrent payment with all the right parameters
+      const card_recurrence = await this.recurrentPayment.find({
+        type: 'individual',
+        payment_medium: 'card',
+        frequencyfactor: {
+          $gt: 0, //right code is $gt
+        },
+        renewalDateMicroSec: {
+          $lte: new Date().valueOf(), //right code is $lte
+        },
+      });
+
+      // console.log('start');
+
+      //WORKFLOW
+      //loop through the above collected repayment array
+      //make paystack call that charges each user's authorization code for previous card payments
+      //reward concerned individual wallet with value
+      //adjust the recurrentPayment plan to show that user has just paid. E.g, extend next charge date if relevant
+      //create transaction history
+      for (let eachrecurrence of card_recurrence) {
+        const url = `https://api.paystack.co/transaction/charge_authorization`;
+        const options = {
+          method: 'POST',
+          url,
+          headers: {
+            Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+            'content-type': 'application/json',
+            'cache-control': 'no-cache',
+          },
+          body: {
+            authorization_code:
+              eachrecurrence?.card_authorization?.authorization_code,
+            email: eachrecurrence?.card_authorization?.email,
+            amount: eachrecurrence?.amount * 100,
+          },
+          json: true,
+        };
+
+        request(options, async (error: any, response: any) => {
+          if (error) {
+            return res
+              .status(400)
+              .json({ msg: `Something went wrong with Paystack's API` });
+          }
+
+          const result = response?.body;
+          if (result?.status === 'error') {
+            console.log({ msg: result?.message || 'Something went wrong' });
+          }
+          // console.log('result:', result);
+          if (result?.data?.status === 'success') {
+            try {
+              const {
+                eventId,
+                senderId: userId,
+                senderName,
+                recipientId,
+                recipientName,
+                amount,
+                currency,
+              } = eachrecurrence;
+
+              const user = await this.User.findOne({ _id: userId });
+              const recipient = await this.User.findOne({ _id: recipientId });
+
+              const userName = user
+                ? `${user?.firstName} ${user?.lastName}`
+                : 'Anonymous';
+              const recieverName = recipient
+                ? `${recipient?.firstName} ${recipient?.lastName}`
+                : 'Anonymous';
+
+              //  Inplace of below event code, charge user instead
+              if (!user || !recipient) {
+                throw new ForbiddenException(
+                  'forbidden request. Contact customer support',
+                );
+              }
+
+              await this.validateUserWallet(recipientId);
+
+              //create debit transaction for sender
+              await this.createTransaction(
+                userId,
+                `${(Math.random() * 10000).toFixed(0)}${Date.now()}`,
+                'successful',
+                currency,
+                amount,
+                {
+                  email: user.email,
+                  phone_number: user.phoneNumber,
+                  name: `${user.firstName} ${user.lastName}`,
+                },
+                `charityapp${Date.now()}${Math.random()}`,
+                'In-app Transfer',
+                'In-app Transaction',
+              );
+
+              //Then fund the recipient's wallet
+              await this.increaseWallet(
+                recipientId,
+                amount,
+                currency,
+                'wallet increment',
+              );
+
+              await this.createWalletTransactions(
+                recipientId,
+                'successful',
+                currency,
+                amount,
+                'Wallet Top-up',
+                `In-app Transaction from ${
+                  senderName || userName
+                } : ${'recurrent tranfer'}`,
+              );
+
+              await this.createTransaction(
+                recipientId,
+                `${(Math.random() * 10000).toFixed(0)}${Date.now()}`,
+                'successful',
+                currency,
+                amount,
+                {
+                  email: recipient?.email,
+                  phone_number: recipient?.phoneNumber,
+                  name: recipientName || recieverName,
+                },
+                `charityapp${Date.now()}${Math.random()}`,
+                'Wallet Top-up',
+                `In-app Transaction from ${
+                  userName || senderName
+                } : ${'recurrent tranfer'}`,
+              );
+
+              eachrecurrence.frequencyfactor--;
+
+              eachrecurrence.renewalDateMicroSec +=
+                eachrecurrence.frequencyDateMilliseconds;
+              if (!eachrecurrence.senderName) {
+                eachrecurrence.senderName = userName;
+              }
+              if (!eachrecurrence.recipientName) {
+                eachrecurrence.recipientName = recieverName;
+              }
+              await eachrecurrence.save();
+              // console.log(eachrecurrence)
+            } catch (err) {
+              console.log({
+                msg: `error from charity wallet recur payment: ${err?.message}`,
+              });
+            }
+          }
+        });
+      }
+
+      res.status(200).json({ msg: 'success' });
+      // console.log('finish');
+    } catch (err) {
+      console.log({
+        msg: `error from charity wallet recur payment: ${err.message}`,
+      });
+    }
+  }
+
+  //CRON JOB
+  //(individual wallet) recurring payment from payer's wallet
+  async recurrentPaymentWithWalletForIndividualCron(res: Response) {
+    try {
+      let charity_wallet_recurrence = await this.recurrentPayment.find({
+        type: 'individual',
+        payment_medium: 'wallet',
+        frequencyfactor: {
+          $gt: 0, //right code is $gt
+        },
+        renewalDateMicroSec: {
+          $lte: new Date().valueOf(), //right code is $lte
+        },
+      });
+
+      // console.log(charity_wallet_recurrence);
+
+      // console.log('res sent');
+
+      //send response header to cron request client and continue code below in the server background
+      res.status(200).json({ msg: 'success' });
+
+      //WORKFLOW
+      //loop through the above collected wallet-repayment array
+      //make call that charges each user's in-app wallet.
+      //Special note: For user to have used wallet to pay previously, they must from logged in on client.
+      //Visitors can't use this feature for obvios reasons. They have no in-app wallet
+      //Next, reward concerned charity with value (following wallet deduction)
+      //adjust the recurrentPayment plan to show that user has just paid. E.g, extend next charge date if relevant
+      //create transaction history
+      // console.log('start');
+      for (let eachrecurrence of charity_wallet_recurrence) {
+        try {
+          const {
+            eventId,
+            senderId: userId,
+            senderName,
+            recipientId,
+            recipientName,
+            amount,
+            currency,
+          } = eachrecurrence;
+
+          const user = await this.User.findOne({ _id: userId });
+          const recipient = await this.User.findOne({ _id: recipientId });
+          const userName = user
+            ? `${user?.firstName} ${user?.lastName}`
+            : 'Anonymous';
+          const recieverName = recipient
+            ? `${recipient?.firstName} ${recipient?.lastName}`
+            : 'Anonymous';
+
+          //  Inplace of below event code, charge user instead
+          if (!user || !recipient) {
+            throw new ForbiddenException(
+              'forbidden request. Contact customer support',
+            );
+          }
+
+          await this.validateUserWallet(recipientId);
+          await this.validateUserWallet(userId);
+          //check if user amount to be transefered to recipient
+          // but before then, confirm if wallet has enough funds in currency specified
+          const wallet = await this.wallet.findOne({ userId });
+
+          //first declare a function for finding actual currency within wallet
+          let particularCurrency = await wallet.currencies.find(
+            (eachCur: any) => {
+              return eachCur?.currency_type === currency;
+            },
+          );
+
+          //then check currency sufficiency
+          const walletBalance = Number(particularCurrency?.balance);
+          if (walletBalance < Number(amount)) {
+            console.log({
+              msg: `Insufficient funds. ${userName} with userId: ${userId} does not have up to ${currency} ${amount} in their wallet`,
+            });
+          }
+
+          //if sender wallet has sufficent funds, deduct wallet
+          await this.decreaseWallet(userId, Number(amount), currency);
+          await this.createWalletTransactions(
+            userId,
+            'successful',
+            currency,
+            amount,
+            'In-app Transfer',
+            'In-app Transaction',
+          );
+          await this.createTransaction(
+            userId,
+            `${(Math.random() * 10000).toFixed(0)}${Date.now()}`,
+            'successful',
+            currency,
+            amount,
+            {
+              email: user.email,
+              phone_number: user.phoneNumber,
+              name: `${user.firstName} ${user.lastName}`,
+            },
+            `charityapp${Date.now()}${Math.random()}`,
+            'In-app Transfer',
+            'In-app Transaction',
+          );
+
+          //Then fund the recipient's wallet
+          await this.increaseWallet(
+            recipientId,
+            amount,
+            currency,
+            'wallet increment',
+          );
+
+          await this.createWalletTransactions(
+            recipientId,
+            'successful',
+            currency,
+            amount,
+            'Wallet Top-up',
+            `In-app Transaction from ${
+              userName || 'anonymous'
+            } : ${'recurrent tranfer'}`,
+          );
+
+          await this.createTransaction(
+            recipientId,
+            `${(Math.random() * 10000).toFixed(0)}${Date.now()}`,
+            'successful',
+            currency,
+            amount,
+            {
+              email: recipient?.email,
+              phone_number: recipient?.phoneNumber,
+              name: `${recipient?.firstName} ${recipient?.lastName}`,
+            },
+            `charityapp${Date.now()}${Math.random()}`,
+            'Wallet Top-up',
+            `In-app Transaction from ${
+              userName || 'anonymous'
+            } : ${'recurrent tranfer'}`,
+          );
+
+          eachrecurrence.frequencyfactor--;
+
+          eachrecurrence.renewalDateMicroSec +=
+            eachrecurrence.frequencyDateMilliseconds;
+          if (!eachrecurrence.senderName) {
+            eachrecurrence.senderName = userName;
+          }
+          if (!eachrecurrence.recipientName) {
+            eachrecurrence.recipientName = recieverName;
+          }
+          await eachrecurrence.save();
+          // console.log(eachrecurrence)
+        } catch (err) {
+          console.log({
+            msg: `error from charity wallet recur payment: ${err.message}`,
+          });
+        }
+      }
+
+      // console.log('finish');
+    } catch (err) {
+      console.log({
+        msg: `error from charity wallet recur payment: ${err.message}`,
+      });
     }
   }
 
@@ -2222,15 +2765,15 @@ export class PaymentService {
           'You are not allowed to perform this action',
         );
       }
-      const isEligible = await this.authservice.confirmFeatureEligibility(
-        'can_use_currency_conversion',
-        userId,
-      );
-      if (isEligible === false) {
-        throw new ForbiddenException(
-          'Currency conversion is not part of your subscription plan. Please upgrade your plan or purchase a bundle that contains the feature',
-        );
-      }
+      // const isEligible = await this.authservice.confirmFeatureEligibility(
+      //   'can_use_currency_conversion',
+      //   userId,
+      // );
+      // if (isEligible === false) {
+      //   throw new ForbiddenException(
+      //     'Currency conversion is not part of your subscription plan. Please upgrade your plan or purchase a bundle that contains the feature',
+      //   );
+      // }
 
       let url =
         'http://api.exchangeratesapi.io/v1/latest?access_key=440ba96caa3491b47c82c3ad055d8e52';

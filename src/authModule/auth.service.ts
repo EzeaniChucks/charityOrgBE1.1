@@ -678,10 +678,11 @@ export class AuthService {
     }
 
     //check for penalties
-    const penalty = user?.penalty.length;
-    if (penalty > 0) {
-      return false;
-    }
+    // const penalty = user?.penalty?.length;
+    // if (penalty > 0) {
+    //   return false;
+    // }
+
     //check for user subscription
     const userSubscriptionType = user?.subscription?.subscription_type;
 

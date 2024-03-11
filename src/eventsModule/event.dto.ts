@@ -134,6 +134,9 @@ export class DeleteEventCommentDTO {
 }
 
 export class CreateRecurrentPaymentDTO {
+  @ApiProperty({ example: 'paystackReference' })
+  cardPaymentRef: string;
+
   @ApiProperty({ example: 'mongooseGeneratedId' })
   userId: string;
 
@@ -142,6 +145,9 @@ export class CreateRecurrentPaymentDTO {
 
   @ApiProperty({ example: 'John Doe' })
   actualName: string;
+
+  @ApiProperty({ example: 'johndoe@site.com' })
+  email: string;
 
   @ApiProperty({ example: 'mongooseGeneratedId' })
   eventId: string;

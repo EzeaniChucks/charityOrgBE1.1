@@ -33,6 +33,7 @@ import {
   flVerifyBVNDetailsDTO,
   sendCryptoToExternalWalletDTO,
 } from './payment.dto';
+import { CreateRecurrentPaymentDTO } from 'src/eventsModule/event.dto';
 @Controller()
 export class PaymentController {
   constructor(private readonly paymentservice: PaymentService) {}
@@ -258,18 +259,6 @@ export class PaymentController {
     return this.paymentservice.payStackPaymentResponse(reference, response);
   }
 
-  @Get('paystack_charity_fund_response')
-  @ApiTags('Payment')
-  payStackCharityFundingResponse(
-    @Query('reference') reference: string,
-    @Res() response: Response,
-  ) {
-    return this.paymentservice.payStackCharityFundingResponse(
-      reference,
-      response,
-    );
-  }
-
   @Get('paystack_get_banks')
   @ApiTags('Payment')
   payStackGetBanks(
@@ -375,6 +364,7 @@ export class PaymentController {
     return this.paymentservice.latestTransactions(userId);
   }
 
+  //wallet one-time transfer to user
   @Post('send_money_to_user')
   @ApiTags('Payment')
   sendMoneyToUser(
@@ -391,9 +381,10 @@ export class PaymentController {
     );
   }
 
+  //wallet recurrent transfer to user
   @Post('send_money_to_recurrent_user')
   @ApiTags('Payment')
-  transferMoneyToUserRecurrent(
+  sendMoneyToUserRecurrent(
     @Body() body: TransferMoneyToUserRecurrentlyINAPPDTO,
     @Res() response: Response,
   ) {
@@ -408,7 +399,7 @@ export class PaymentController {
       inappRecurrentUserName,
       inappRecurrentNote,
     } = body;
-    return this.paymentservice.transferMoneyToUserRecurrent(
+    return this.paymentservice.sendMoneyToUserRecurrent(
       userId,
       recipientId,
       currency,
@@ -420,6 +411,71 @@ export class PaymentController {
       inappRecurrentNote,
       response,
     );
+  }
+
+  //card/bank one-time transfer response
+  @Get('paystack_one_time__transfer_to_individual_response')
+  @ApiTags('Events')
+  payStackOneTimeFundTransferResponse(
+    @Query('reference') reference: string,
+    @Res() response: Response,
+  ) {
+    return this.paymentservice.payStackOneTimeFundTransferResponse(
+      reference,
+      response,
+    );
+  }
+
+  //card recurrent transfer to individual response
+  @Get('paystack_recurrent_transfer_to_individual_response')
+  @ApiTags('Events')
+  payStackRecurrentFundTransferResponse(
+    @Body()
+    body: CreateRecurrentPaymentDTO,
+    @Res() res: Response,
+  ) {
+    const {
+      cardPaymentRef, //from PayStack successful card payment
+      userId,
+      eventId,
+      actualName,
+      amount,
+      note,
+      email,
+      frequencyDateUnit,
+      frequencyDateValue,
+      renewalEndDateMs,
+    } = body;
+
+    return this.paymentservice.payStackRecurrentFundTransferResponse({
+      cardPaymentRef,
+      userId,
+      eventId,
+      email,
+      actualName,
+      amount,
+      note,
+      frequencyDateValue,
+      frequencyDateUnit,
+      renewalEndDateMs,
+      res,
+    });
+  }
+
+  //CRON JOB
+  //card recurrent payment to user
+  @Get('recurrent_payment_with_card_for_individual_cron')
+  @ApiTags('Events')
+  async recurrentPaymentWithCardForIndividualCron(@Res() res: Response) {
+    return this.paymentservice.recurrentPaymentWithCardForIndividualCron(res);
+  }
+
+  //CRON JOB
+  //wallet recurrent payment to user
+  @Get('recurrent_payment_with_wallet_for_individual_cron')
+  @ApiTags('Events')
+  async recurrentPaymentWithWalletForindividualCron(@Res() res: Response) {
+    return this.paymentservice.recurrentPaymentWithWalletForIndividualCron(res);
   }
 
   @Post('get_fiat_exchange_rates')

@@ -31,6 +31,9 @@ import { NotifModule } from 'src/notificationModule/notifModule';
     MongooseModule.forFeature([
       { name: 'eventDetails', schema: eventDetailsSchema },
     ]),
+    MongooseModule.forFeature([
+      { name: 'transaction', schema: transactionSchema },
+    ]),
     MongooseModule.forFeature([{ name: 'wallet', schema: walletSchema }]),
     MongooseModule.forFeature([
       { name: 'walletTransaction', schema: walletTransactionSchema },
@@ -46,6 +49,6 @@ import { NotifModule } from 'src/notificationModule/notifModule';
   ],
   providers: [EventsServices],
   controllers: [EventsController],
-  exports:[EventsServices]
+  exports: [EventsServices],
 })
 export class EventsModule {}

@@ -161,14 +161,18 @@ export const walletSchema = new mongoose.Schema(
 export const recurrentPayment = new mongoose.Schema(
   {
     senderId: { type: String, required: true },
-    eventId: { type: String},
-    recipientId: { type: String},
+    senderName: { type: String, required: true },
+    eventId: { type: String },
+    recipientId: { type: String },
+    recipientName: { type: String },
     amount: { type: Number, required: true },
     currency: { type: String, required: true },
     frequencyfactor: { type: Number, required: true },
     frequencyDateMilliseconds: { type: Number, required: true },
     renewalDateMicroSec: { type: Number, required: true },
-    type:{type:String, enum:['individual', 'charity']}
+    type: { type: String, enum: ['individual', 'charity', 'membership'] },
+    payment_medium: { type: String, enum: ['card', 'wallet'] },
+    card_authorization: { type: Object },
   },
   { timestamps: true },
 );
