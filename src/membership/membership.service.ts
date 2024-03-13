@@ -10,10 +10,171 @@ import { jwtIsValid } from 'src/util';
 export class MembershipService {
   constructor(
     @InjectModel('membership') private membership: Model<any>,
+    @InjectModel('CharityAppUsers') private user: Model<any>,
     private readonly walletservice: PaymentService,
   ) {}
+
   //create CRON job for charging members of membership groups
   //soon to be executed
+  async recurrentPaymentFromWalletForMembershipCron(res: Response) {
+    try {
+      const allMemberships = await this.membership.find();
+      for (let eachmembership of allMemberships) {
+        if (eachmembership?.members?.length > 0) {
+          // console.log('the membership:', eachmembership);
+          const { creatorId, amount, currency, title, charge_frequency_MS } =
+            eachmembership;
+          for (let everymember of eachmembership.members) {
+            const {
+              userId: memberId,
+              userName: memberName,
+              chargeDate,
+            } = everymember;
+
+            let chargeDateArrayLength = chargeDate?.length;
+            if (chargeDate[chargeDateArrayLength - 1] < new Date()) {
+              try {
+                // console.log('every expired member:', everymember);
+
+                //charge member by transfering money from their wallet to membership creator's wallet
+                //firstly reduce member's wallet
+                await this.walletservice.validateUserWallet(memberId);
+                await this.walletservice.decreaseWallet(
+                  memberId,
+                  amount,
+                  currency,
+                );
+
+                //then increase creator's wallet
+                await this.walletservice.validateUserWallet(creatorId);
+                await this.walletservice.increaseWallet(
+                  creatorId,
+                  amount,
+                  currency,
+                  'membership payment',
+                );
+
+                //create wallet transaction and general trx data for both creator's credit and members' debit
+
+                //creator's record
+                const creator = await this.user.findOne({ _id: creatorId });
+                //wallet trx
+                await this.walletservice.createWalletTransactions(
+                  creatorId,
+                  'successful',
+                  currency,
+                  amount,
+                  'Wallet Top-up',
+                  `Membership remission of ${currency} ${amount} from ${memberName} on your membership: "${title}"`,
+                );
+                //general trx
+                await this.walletservice.createTransaction(
+                  creatorId,
+                  `${(Math.random() * 10000).toFixed(0)}${Date.now()}`,
+                  'successful',
+                  currency,
+                  amount,
+                  {
+                    email: creator?.email,
+                    phone_number: creator?.phoneNumber,
+                    name: `${creator?.firstName} ${creator.lastName}`,
+                  },
+                  `charityapp${Date.now()}${Math.random()}`,
+                  'Wallet Top-up',
+                  `Membership remission of ${currency} ${amount} from ${memberName} on your membership: "${title}"`,
+                );
+
+                //member's record
+                const member = await this.user.findOne({ _id: memberId });
+
+                //wallet trx
+                await this.walletservice.createWalletTransactions(
+                  memberId,
+                  'successful',
+                  currency,
+                  amount,
+                  'Wallet Withdraw',
+                  `Membership remission of ${currency} ${amount} from you to a membership you belong to: "${title}"`,
+                );
+
+                //general trx
+                await this.walletservice.createTransaction(
+                  memberId,
+                  `${(Math.random() * 10000).toFixed(0)}${Date.now()}`,
+                  'successful',
+                  currency,
+                  amount,
+                  {
+                    email: member?.email,
+                    phone_number: member?.phoneNumber,
+                    name: `${member?.firstName} ${member.lastName}`,
+                  },
+                  `charityapp${Date.now()}${Math.random()}`,
+                  'Wallet Withdraw',
+                  `Membership remission of ${currency} ${amount} from you to a membership you belong to: "${title}"`,
+                );
+
+                //lastly, push new charge date into the member's payment plan (marked by the chargeDate field)
+                await this.membership.findOneAndUpdate(
+                  {
+                    _id: eachmembership?._id,
+                    'members.userId': everymember.userId,
+                  },
+                  {
+                    $push: {
+                      'members.$.chargeDate': new Date(
+                        Date.now() + charge_frequency_MS,
+                      ),
+                    },
+                  },
+                );
+              } catch (err) {
+                //send email to user asking them to fund their wallet to allow deduction from a particular membership,
+                //created by a perticular person, if err message is: "You do not have up to 239 NGN in your NGN wallet"
+                console.log({ msg: `server error: ${err?.message}` });
+              }
+            }
+          }
+        }
+      }
+    } catch (err) {
+      //send email to user asking them to fund their wallet to allow deduction from a particular membership,
+      //created by a perticular person, if err message is: "You do not have up to 239 NGN in your NGN wallet"
+      console.log({ msg: `server error: ${err?.message}` });
+    }
+  }
+  // export const membershipSchema = new mongoose.Schema({
+  //   creatorId: { type: mongoose.Schema.Types.ObjectId },
+  //   title: { type: String, required: true, unique:true },
+  //   members: [
+  //     {
+  //       userId: { type: mongoose.Schema.Types.ObjectId },
+  //       userName: { type: String },
+  //       chargeDate: [Date], //array of charge date strings
+  //     },
+  //   ],
+  //   currency: { type: String, required: true },
+  //   amount: { type: Number, required: true },
+  //   description: { type: String, required: true },
+  //   status: { type: String, default: 'active', enum: ['active', 'inactive'] },
+  //   chargeFrequencyUnit: { type: String, required: true },
+  //   chargeFrequencyValue: { type: Number, required: true },
+  //   charge_frequency_MS: { type: Number }, //charge milliseconds to be added
+  //   reviews: [
+  //     new mongoose.Schema(
+  //       {
+  //         name: { type: String },
+  //         comment: { type: String },
+  //         reviewerId:{type:mongoose.Schema.Types.ObjectId, required:true}
+  //       },
+  //       { timestamps: true },
+  //     ),
+  //   ],
+  // });
+  async recurrentPaymentFromCardForMembershipCron() {
+    try {
+    } catch (err) {}
+  }
 
   //create membrship
   async createMembership(
@@ -66,6 +227,7 @@ export class MembershipService {
         charge_frequency_MS,
         chargeFrequencyUnit,
         chargeFrequencyValue,
+        // exactChargeDateMs: Date.now(),
       });
       if (!newMembership) {
         return res.status(400).json({
@@ -188,7 +350,7 @@ export class MembershipService {
     membershipId: string,
     reviewName: string,
     reviewComment: string,
-    req:Request,
+    req: Request,
     res: Response,
   ) {
     try {
@@ -201,7 +363,7 @@ export class MembershipService {
           .status(400)
           .json({ msg: 'reviewerId and membershipOwnerId are both required' });
       }
-       const result = await jwtIsValid(req.signedCookies.accessToken);
+      const result = await jwtIsValid(req.signedCookies.accessToken);
 
       // console.log(result._id, body?.creatorId);
       // console.log(reviewerId, membershipOwnerId)
@@ -253,7 +415,7 @@ export class MembershipService {
   async deleteMembership(
     creatorId: string,
     membershipId: string,
-    req:Request,
+    req: Request,
     res: Response,
   ) {
     try {

@@ -15,7 +15,7 @@ import { AuthService } from './auth.service';
 import { Request, Response } from 'express';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { File } from 'buffer';
-import { CompleteRegisterResponseDTO, EditAccountDetailsDTO, EditAccountDetailsResponseDTO, LoginDTO, LoginResponseDTO, LogoutResponseDTO, RegisterDTO, SearchUserResponseDTO, StartRegisterResponseDTO, VerifyEmailDTO, VerifyEmailResponseDTO } from './auth.dto';
+import { CompleteRegisterResponseDTO, EditAccountDetailsDTO, EditAccountDetailsResponseDTO, EditUserBundleAmountDTO, EditUserSubTypeDTO, LoginDTO, LoginResponseDTO, LogoutResponseDTO, RegisterDTO, SearchUserResponseDTO, StartRegisterResponseDTO, VerifyEmailDTO, VerifyEmailResponseDTO } from './auth.dto';
 import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 
 @Controller()
@@ -45,7 +45,10 @@ export class AuthController {
     type: CompleteRegisterResponseDTO,
   })
   @ApiTags('Auth')
-  async completeRegistration(@Body('userId') userId: string, @Res() res: Response) {
+  async completeRegistration(
+    @Body('userId') userId: string,
+    @Res() res: Response,
+  ) {
     return await this.authservice.completeRegistration(userId, res);
   }
 
@@ -166,6 +169,21 @@ export class AuthController {
     );
   }
 
+  @Post('auth/editUserSubType')
+  @ApiTags('Auth')
+  editUserSubType(@Body() body: EditUserSubTypeDTO) {
+    const { subType, userId } = body;
+    return this.authservice.editUserSubscriptiontype({ subType, userId });
+  }
+
+  @Post('auth/editUserBundleAmount')
+  @ApiTags('Auth')
+  editUserBundleAmount(@Body() body: EditUserBundleAmountDTO) {
+    // const { userId, bundle_type_variable, bundle_quantity_to_buy } = body;
+    const { userId, frontendBundleName } = body;
+    return this.authservice.editUserBundleAmount(userId, frontendBundleName);
+  }
+
   @Post('auth/upload_verification_docs/:userId')
   @ApiTags('Auth')
   @UseInterceptors(FilesInterceptor('files'))
@@ -179,13 +197,10 @@ export class AuthController {
     }
     return this.authservice.acceptVerificationDocuments(file, userId, res);
   }
-  
+
   @Get('auth/token_is_still_valid')
-    @ApiTags('Auth')
-     async tokenIsStillValid(
-      @Req() req: Request,
-      @Res() res: Response,
-    ) {
-      return this.authservice.tokenIsStillValid(req, res);
-    }
+  @ApiTags('Auth')
+  async tokenIsStillValid(@Req() req: Request, @Res() res: Response) {
+    return this.authservice.tokenIsStillValid(req, res);
+  }
 }

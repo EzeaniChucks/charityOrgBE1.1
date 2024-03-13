@@ -43,4 +43,36 @@ export const userSchema = new mongoose.Schema({
   offical_verification_bank_statement: { type: String, default: '' },
   official_verification_id: { type: String, default: '' },
   isAdmin: { type: Boolean, default: false },
+  subscription: {
+    subscription_type: { type: String, default: 'free' },
+    subscription_date: { type: Date, default: new Date() },
+  },
+  bundle: [
+    {
+      bundleName: { type: String, required: true, unique: true },
+      bundleFeatures: [
+        {
+          featureName: {
+            type: String,
+            required: true,
+            enum: [
+              'can_use_crypto',
+              'can_use_currency_conversion',
+              'can_use_pledge_forms',
+              'dep_in_multi_eventCategories',
+              'extend_dep_comp_deadlines',
+              'can_be_obs_or_dep',
+              'can_pick_event_currency',
+              'can_pick_event_timezone',
+              'can_invite_obser_or_depos',
+              'can_add_new_category',
+              'can_transfer_money_inapp',
+              'can_see_full_list_of_transaction',
+            ],
+          },
+          stockLeft: { type: Number, required: true, default: 0 },
+        },
+      ],
+    },
+  ],
 });

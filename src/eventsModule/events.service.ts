@@ -302,16 +302,6 @@ export class EventsServices {
     }
   }
 
-  async recurrentPaymentFromCardForMembershipCron() {
-    try {
-    } catch (err) {}
-  }
-
-  async recurrentPaymentFromWalletForMembershipCron() {
-    try {
-    } catch (err) {}
-  }
-
   async createEvent(imagefile: Express.Multer.File, body: any, res: Response) {
     try {
       const newevent = await this.event.create(body);

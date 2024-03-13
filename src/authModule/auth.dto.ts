@@ -170,6 +170,23 @@ export class EditAccountDetailsDTO {
   @ApiProperty({ example: 'NGN' })
   accountCurrency: string;
 }
+
+export class EditUserSubTypeDTO {
+  @ApiProperty({ example: 'Free or Gold or Platinum' })
+  subType: string;
+
+  @ApiProperty({ example: 'mongooseGeneratedId' })
+  userId: string;
+}
+
+export class EditUserBundleAmountDTO {
+  @ApiProperty({ example: 'mongooseGeneratedId' })
+  userId: string;
+
+  @ApiProperty({ example: 'Free or Gold or Platinum' })
+  frontendBundleName: string;
+}
+
 export class EditAccountDetailsResponseDTO {
   @ApiProperty({ example: 'success' })
   msg: string;

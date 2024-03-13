@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 
 export const membershipSchema = new mongoose.Schema({
   creatorId: { type: mongoose.Schema.Types.ObjectId },
-  title: { type: String, required: true },
+  title: { type: String, required: true, unique: true },
   members: [
     {
       userId: { type: mongoose.Schema.Types.ObjectId },
@@ -22,9 +22,12 @@ export const membershipSchema = new mongoose.Schema({
       {
         name: { type: String },
         comment: { type: String },
-        reviewerId:{type:mongoose.Schema.Types.ObjectId, required:true}
+        reviewerId: { type: mongoose.Schema.Types.ObjectId, required: true },
       },
       { timestamps: true },
     ),
   ],
 });
+
+//i can charge their wallets
+//i can charge their cards

@@ -165,6 +165,7 @@ export const recurrentPayment = new mongoose.Schema(
     eventId: { type: String },
     recipientId: { type: String },
     recipientName: { type: String },
+    note: { type: String },
     amount: { type: Number, required: true },
     currency: { type: String, required: true },
     frequencyfactor: { type: Number, required: true },

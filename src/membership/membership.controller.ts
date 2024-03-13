@@ -1,13 +1,39 @@
-import { Body, Controller, Post, Get, Put, Delete, Param, Res, Req} from "@nestjs/common";
-import { MembershipService } from "./membership.service";
-import { Request, Response } from "express";
-import { ApiTags } from "@nestjs/swagger";
-import { AcceptMembershipReviewsDTO, DeleteMembershipDTO, JoinMembershipDTO, LeaveMembershipDTO, createMembershipDTO, fetchSingleMembershipDTO, updateMembershipDTO } from "./membership.dto";
+import {
+  Body,
+  Controller,
+  Post,
+  Get,
+  Put,
+  Delete,
+  Param,
+  Res,
+  Req,
+} from '@nestjs/common';
+import { MembershipService } from './membership.service';
+import { Request, Response } from 'express';
+import { ApiTags } from '@nestjs/swagger';
+import {
+  AcceptMembershipReviewsDTO,
+  DeleteMembershipDTO,
+  JoinMembershipDTO,
+  LeaveMembershipDTO,
+  createMembershipDTO,
+  fetchSingleMembershipDTO,
+  updateMembershipDTO,
+} from './membership.dto';
 
 @Controller('membership')
 export class MembershipController {
   constructor(private readonly membershipservice: MembershipService) {}
 
+  //CRON JOB
+  @Get('recurrent_payment_from_wallet_for_membership_cron')
+  @ApiTags('Membership')
+  async recurrentPaymentFromWalletForMembershipCron(@Res() res: Response) {
+    return this.membershipservice.recurrentPaymentFromWalletForMembershipCron(
+      res,
+    );
+  }
   //Create Membership
   @Post('create')
   @ApiTags('Membership')
@@ -60,9 +86,9 @@ export class MembershipController {
   async acceptMembershipReviews(
     @Body()
     body: AcceptMembershipReviewsDTO,
-    @Req() req:Request,
+    @Req() req: Request,
     @Res() res: Response,
-    ) {
+  ) {
     const {
       reviewerId,
       membershipOwnerId,
@@ -86,7 +112,7 @@ export class MembershipController {
   @ApiTags('Membership')
   async deleteMembership(
     @Param() param: DeleteMembershipDTO,
-    @Req() req:Request,
+    @Req() req: Request,
     @Res() res: Response,
   ) {
     return this.membershipservice.deleteMembership(

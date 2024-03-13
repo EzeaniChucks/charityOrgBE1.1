@@ -414,10 +414,10 @@ export class PaymentController {
   }
 
   //card/bank one-time transfer response
-  @Get('paystack_one_time__transfer_to_individual_response')
-  @ApiTags('Events')
+  @Post('paystack_one_time_transfer_to_individual_response')
+  @ApiTags('Payment')
   payStackOneTimeFundTransferResponse(
-    @Query('reference') reference: string,
+    @Body('reference') reference: string,
     @Res() response: Response,
   ) {
     return this.paymentservice.payStackOneTimeFundTransferResponse(
@@ -427,37 +427,15 @@ export class PaymentController {
   }
 
   //card recurrent transfer to individual response
-  @Get('paystack_recurrent_transfer_to_individual_response')
-  @ApiTags('Events')
+  @Post('paystack_recurrent_transfer_to_individual_response')
+  @ApiTags('Payment')
   payStackRecurrentFundTransferResponse(
-    @Body()
-    body: CreateRecurrentPaymentDTO,
+    @Body('cardPaymentRef') cardPaymentRef: string,
     @Res() res: Response,
   ) {
-    const {
-      cardPaymentRef, //from PayStack successful card payment
-      userId,
-      eventId,
-      actualName,
-      amount,
-      note,
-      email,
-      frequencyDateUnit,
-      frequencyDateValue,
-      renewalEndDateMs,
-    } = body;
-
+    //cardPaymentRef is reference from PayStack successful card payment
     return this.paymentservice.payStackRecurrentFundTransferResponse({
       cardPaymentRef,
-      userId,
-      eventId,
-      email,
-      actualName,
-      amount,
-      note,
-      frequencyDateValue,
-      frequencyDateUnit,
-      renewalEndDateMs,
       res,
     });
   }
@@ -465,7 +443,7 @@ export class PaymentController {
   //CRON JOB
   //card recurrent payment to user
   @Get('recurrent_payment_with_card_for_individual_cron')
-  @ApiTags('Events')
+  @ApiTags('Payment')
   async recurrentPaymentWithCardForIndividualCron(@Res() res: Response) {
     return this.paymentservice.recurrentPaymentWithCardForIndividualCron(res);
   }
@@ -473,7 +451,7 @@ export class PaymentController {
   //CRON JOB
   //wallet recurrent payment to user
   @Get('recurrent_payment_with_wallet_for_individual_cron')
-  @ApiTags('Events')
+  @ApiTags('Payment')
   async recurrentPaymentWithWalletForindividualCron(@Res() res: Response) {
     return this.paymentservice.recurrentPaymentWithWalletForIndividualCron(res);
   }
