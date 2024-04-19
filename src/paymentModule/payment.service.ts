@@ -22,6 +22,7 @@ import { Response, response } from 'express';
 import { AuthService } from 'src/authModule/auth.service';
 import { ModuleRef } from '@nestjs/core';
 import { NotifService } from 'src/notificationModule/notifService';
+import axios from 'axios';
 
 @Injectable()
 export class PaymentService {
@@ -37,7 +38,6 @@ export class PaymentService {
     private authservice: AuthService, // private Wallet: PaymentService,
     private readonly notificationservice: NotifService,
   ) {}
-
   //HELPER FUNCTIONS
   async validateUserWallet(userId: string) {
     const user = await this.User.findOne({ _id: userId });
@@ -281,12 +281,15 @@ export class PaymentService {
         `You do not have up to ${amount} ${particularCurrency.currency_type} in your ${particularCurrency.currency_type} wallet`,
       );
     }
-    let percent_inc = 0;
-    if (particularCurrency.total_topup === 0) {
-      percent_inc = 100;
+
+    let total_outflow_percent_dec = 0;
+    if (particularCurrency.total_outflow_percent_dec === 0) {
+      total_outflow_percent_dec = 100;
     } else {
-      percent_inc =
-        (Number(amount) / Number(particularCurrency.total_topup)) * 100;
+      total_outflow_percent_dec =
+        ((Number(particularCurrency.total_outflow) - Number(amount)) /
+          Number(particularCurrency.total_outflow)) *
+        100;
     }
 
     const wallet = await this.wallet.findOneAndUpdate(
@@ -294,6 +297,10 @@ export class PaymentService {
       {
         $inc: {
           'currencies.$.balance': -Number(amount).toFixed(2),
+          'currencies.$.total_outflow': Number(amount).toFixed(2),
+        },
+        $set: {
+          'currencies.$.total_outflow_percent_dec': Number(amount).toFixed(2),
         },
       },
       { new: true },
@@ -571,56 +578,6 @@ export class PaymentService {
       });
     }
   }
-  //FL verify account not working properly. Return "incorrect bank" error
-  async verifyAccount(
-    account_number: string | number,
-    account_bank: string,
-    country: string,
-    res: any,
-  ) {
-    try {
-      // const flw = new Flutterwave(
-      //   process.env.FLUTTERWAVE_V3_PUBLIC_KEY,
-      //   process.env.FLUTTERWAVE_V3_SECRET_KEY,
-      // );
-      // console.log({ account_bank, account_number, country });
-      // const details = {
-      //   account_number,
-      //   account_bank,
-      //   country,
-      // };
-      // const accDetails = await flw.Misc.verify_Account(details);
-      // return { accDetails };
-      const url = `https://api.flutterwave.com/v3/accounts/resolve`;
-      const options = {
-        method: 'POST',
-        url,
-        headers: {
-          Authorization: `Bearer ${process.env.FLUTTERWAVE_V3_SECRET_KEY}`,
-        },
-        body: { account_bank, account_number, country },
-        json: true,
-      };
-
-      request(options, async (error: any, response: any) => {
-        if (error) {
-          return res
-            .status(400)
-            .json({ msg: 'Something went wrong with fetching banks' });
-        }
-        // console.log(response.body);
-        const result = response?.body;
-        if (result.status === 'error') {
-          return res
-            .status(400)
-            .json({ msg: 'No bank is found for this particular bank details' });
-        }
-        return res.status(200).json({ response: result });
-      });
-    } catch (err) {
-      throw new InternalServerErrorException({ msg: err.message });
-    }
-  }
 
   //FL payment response
   async paymentresponse(
@@ -630,7 +587,7 @@ export class PaymentService {
   ) {
     try {
       const flw = new Flutterwave(
-        // 'FLWPUBK-24b4db4ba5c49a5e48daac3eabcd563b-X',
+        // 'FLWPUBK_TEST-31f261f02a971b32bd56cf4deff5e74a-X',
         `${process.env.FLUTTERWAVE_V3_PUBLIC_KEY}`,
         `${process.env.FLUTTERWAVE_V3_SECRET_KEY}`,
       );
@@ -697,6 +654,7 @@ export class PaymentService {
       });
     }
   }
+
   //FL bank payment
   async flSendMoneyToBank(
     userId: string,
@@ -709,15 +667,16 @@ export class PaymentService {
     try {
       const user = await this.User.findOne({ _id: userId });
       if (!user) {
-        throw new ForbiddenException(
-          'forbidden request. This user doen not exist',
-        );
+        return response
+          .status(400)
+          .json('forbidden request. This user doen not exist');
       }
+
       //amount below 100 cannot be sent
       // console.log(userId, amount, currency, account_bank, account_number);
-      await this.validateUserWallet(userId);
-      await this.decreaseWallet(userId, amount, currency); //It is necessary to call this here because a code within this method checks if user has requested amount in their wallet
-      // await this.createWalletTransactions(userId)
+      // await this.validateUserWallet(userId);
+      // await this.decreaseWallet(userId, amount, currency); //It is necessary to call this here because a code within this method checks if user has requested amount in their wallet
+      // // await this.createWalletTransactions(userId)
       const walletTrans = await this.createWalletTransactions(
         userId,
         'pending',
@@ -727,27 +686,28 @@ export class PaymentService {
         'Bank Transfer',
       );
       // const { account_bank, account_number } = user.bankDetails;
-      const callback_url =
-        'https://charityapp.cyclic.app/respond_to_fl_bank_payment';
+      const callback_url = `https://${process.env.BACK_END_CONNECTION}/respond_to_fl_bank_payment`;
       const reference = `${user.firstName}_${user.lastName}_${Date.now()}`;
       const data = {
         account_bank,
         account_number: account_number,
         amount: Number(amount),
-        narration: `Transfer from ${user.firstName} ${user.lastName} @CharityApp`,
+        narration: `Transfer from ${user?.firstName} ${user?.lastName} @CharityApp`,
         currency,
         reference,
         callback_url,
         debit_currency: 'NGN',
+        beneficiary_name: `${user?.firstName} ${user?.lastName}`,
         meta: {
+          beneficiary_id: userId,
           first_name: user.firstName,
           last_name: user.lastName,
           mobile_number: user.phoneNumber,
           email: user.email,
           beneficiary_country: user.country || 'NG',
           beneficiary_occupation: 'merchant',
-          beneficiary_id: userId,
           wallettransaction_id: walletTrans._id,
+          // wallettransaction_id: 'test_wallet_trx_ID',
           recipient_address:
             user.address || 'opposite Access bank, ilupeju, lagos Nigeria',
           sender: 'Bankole Kasumu',
@@ -769,6 +729,11 @@ export class PaymentService {
       );
       const result = await flw.Transfer.initiate(data);
       console.log(result);
+      if (result.status === 'error') {
+        return response
+          .status(400)
+          .json({ msg: 'failed', payload: result.message });
+      }
       //  const fl_queued_result =     {
       //   status: 'success',
       //   message: 'Transfer Queued Successfully',
@@ -825,23 +790,27 @@ export class PaymentService {
         'Wallet Withdraw',
         'Bank Transaction: Flutterwave bank transfer',
       );
-      response.status(200).json({ msg: 'success', result });
+      return response
+        .status(200)
+        .json({ msg: 'success', payload: result.data });
     } catch (err) {
       throw new InternalServerErrorException({ msg: err.message });
     }
   }
+
   //FL bank payment listener
   async respondToFLBankPayment(body: any) {
+    // console.log('call back received');
     const { id, currency, amount, meta, narration, status } = body.data;
     if (status === 'SUCCESSFUL') {
       await this.updateTransactionStatus(
         id,
-        'succesful',
+        'successful',
         'amount deposited to bank',
       );
       await this.updateWalletTransactionStatus(
         meta?.wallettransaction_id,
-        'succesful',
+        'successful',
         'amount deposited to bank',
       );
       return response
@@ -932,6 +901,7 @@ export class PaymentService {
       });
     }
   }
+
   //FL get wallet balance
   async flGetWalletBalance(currency: string, response: Response) {
     try {
@@ -965,6 +935,53 @@ export class PaymentService {
     }
   }
 
+  //Fl check tranfer fee
+  async flChecktransferFee(amount: number, currency: string, res: Response) {
+    try {
+      const url = `https://api.flutterwave.com/v3/transfers/fee?type=account&&amunt=${amount}&&currency=${currency}`;
+      const { data } = await axios.get(url, {
+        headers: {
+          Authorization: `Bearer ${process.env.FLUTTERWAVE_V3_SECRET_KEY}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      return res.status(200).json({ msg: 'successful', payload: data?.data });
+    } catch (err: any) {
+      return res
+        .status(500)
+        .json({ msg: err?.response?.data?.message || err?.message });
+    }
+  }
+
+  //FL verify account number
+  async verifyAccount(
+    account_number: string | number,
+    account_bank: string,
+    country: string,
+    res: any,
+  ) {
+    try {
+      const url = `https://api.flutterwave.com/v3/accounts/resolve`;
+
+      const { data } = await axios.post(
+        url,
+        { account_bank, account_number, country },
+        {
+          headers: {
+            Authorization: `Bearer ${process.env.FLUTTERWAVE_V3_SECRET_KEY}`,
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+      return res.status(200).json({ msg: 'successful', payload: data });
+    } catch (err) {
+      return res.status(500).json({ msg: err.message });
+    }
+  }
+
+  //Not working. Needs a PCIS (or so) certification, accroding to flutterwave
+  //Alternative method is from one of Paystack's group of endpoints below
   async flVerifyBVNDetails({
     bvn,
     firstname,
@@ -1675,14 +1692,16 @@ export class PaymentService {
         currency,
         'wallet increment',
       );
+
       await this.createWalletTransactions(
         recipientId,
         'successful',
         currency,
         realamount,
-        'Wallet Top-up',
+        `Wallet Top-up: In-app credit from ${user?.firstName} ${user?.lastName}`,
         'In-app Transaction',
       );
+
       await this.createTransaction(
         recipientId,
         `${(Math.random() * 10000).toFixed(0)}${Date.now()}`,
@@ -1690,16 +1709,16 @@ export class PaymentService {
         currency,
         realamount,
         {
-          email: user.email,
-          phone_number: user.phoneNumber,
-          name: `${user.firstName} ${user.lastName}`,
+          email: user?.email,
+          phone_number: user?.phoneNumber,
+          name: `${user?.firstName} ${user?.lastName}`,
         },
-        `charityapp${Date.now()}${Math.random()}`,
-        'Wallet Top-up',
+        `charityapp${Date.now()}${Math?.random()}`,
+        `Wallet Top-up: In-app credit from ${user?.firstName} ${user?.lastName}`,
         'In-app Transaction',
       );
       const result = senderwallet?.currencies?.find((eachCur: any) => {
-        return eachCur.currency_type === currency;
+        return eachCur?.currency_type === currency;
       });
       return response.status(200).json({ msg: 'succesful', payload: result });
     } catch (err) {
@@ -1828,7 +1847,7 @@ export class PaymentService {
         'successful',
         currency,
         realamount,
-        'Wallet Top-up',
+        `Wallet Top-up: In-app credit from ${user?.firstName} ${user?.lastName}`,
         `In-app Transaction from ${
           inappRecurrentUserName || 'anonymous'
         } : ${inappRecurrentNote}`,
@@ -1846,7 +1865,7 @@ export class PaymentService {
           name: `${user.firstName} ${user.lastName}`,
         },
         `charityapp${Date.now()}${Math.random()}`,
-        'Wallet Top-up',
+        `Wallet Top-up: In-app credit from ${user?.firstName} ${user?.lastName}`,
         `In-app Transaction from ${
           inappRecurrentUserName || 'anonymous'
         } : ${inappRecurrentNote}`,
@@ -2142,13 +2161,15 @@ export class PaymentService {
             }
 
             //PLUG TRANSFER CODE IN HERE
-            const realamount = Number(amount) - Number(chargeAmount||0);
-            
-            //recipient use document
-            const recipient = await this.User.findOne({ _id: recipientId.trim() });
+            const realamount = Number(amount) - Number(chargeAmount || 0);
 
-            await this.validateUserWallet(recipient?._id)
-            
+            //recipient use document
+            const recipient = await this.User.findOne({
+              _id: recipientId.trim(),
+            });
+
+            await this.validateUserWallet(recipient?._id);
+
             //increase recipient's wallet
             await this.increaseWallet(
               recipient?._id,
@@ -2190,7 +2211,7 @@ export class PaymentService {
               id,
               status,
               currency,
-              Number(amount/100),
+              Number(amount / 100),
               {
                 name: aliasName,
                 email: senderEmail,
@@ -2205,7 +2226,7 @@ export class PaymentService {
             //create recurrent payment object
             await this.recurrentPayment.create({
               senderId,
-              senderName: aliasName ||senderName|| 'Anonymous',
+              senderName: aliasName || senderName || 'Anonymous',
               recipientId,
               recipientName: `${recipient?.firstName} ${recipient?.lastName}`,
               amount: Number(amount) / 100,
@@ -2255,9 +2276,9 @@ export class PaymentService {
           $lte: new Date().valueOf(), //$lte: lesser than or equal to
         },
       });
-      
+
       console.log('start');
-      console.log(card_recurrence)
+      console.log(card_recurrence);
       //WORKFLOW
       //loop through the above collected repayment array
       //make paystack call that charges each user's authorization code for previous card payments
@@ -2316,7 +2337,6 @@ export class PaymentService {
                 ? `${recipient?.firstName} ${recipient?.lastName}`
                 : 'Anonymous';
 
-                
               if (!user || !recipient) {
                 console.log(
                   `senderID or RecipientId is wrong for this recurrent payment with id: ${eachrecurrence?._id}`,

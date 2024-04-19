@@ -145,12 +145,12 @@ export class PaymentController {
   }
 
   //flutterwave
-  @Get('verify_account_details')
+  @Post('verify_account_details')
   @ApiTags('Payment')
   verifyAcount(
-    @Query('account_number') account_number: string,
-    @Query('account_bank') account_bank: string,
-    @Query('country') country: string,
+    @Body('account_number') account_number: string,
+    @Body('account_bank') account_bank: string,
+    @Body('country') country: string,
     @Res() response: any,
   ) {
     return this.paymentservice.verifyAccount(
@@ -189,7 +189,7 @@ export class PaymentController {
   //flutterwave send money to account
   @Post('/send_money_to_user_bank')
   @ApiTags('Payment')
-  sendMoneyToFLBankAccount(
+  flSendMoneyToBank(
     @Body() body: SendMoneyToUserBankDTO,
     @Res() res: Response,
   ) {
@@ -208,6 +208,16 @@ export class PaymentController {
   @ApiTags('Payment')
   flRespondToPayment(@Body() body: FlListenToBankTranferDTO) {
     return this.paymentservice.respondToFLBankPayment(body);
+  }
+
+  @Post('/fl_check_transaction_fee')
+  @ApiTags('Payment')
+  flChecktransferFee(
+    @Body() body: { amount: number; currency: string },
+    @Res() res: Response,
+  ) {
+    const { amount, currency } = body;
+    return this.paymentservice.flChecktransferFee(amount, currency, res);
   }
 
   //flutterwave check balance in dashboard wallet

@@ -305,8 +305,10 @@ export class EventsServices {
   async createEvent(imagefile: Express.Multer.File, body: any, res: Response) {
     try {
       const newevent = await this.event.create(body);
-      const result = await this.cloudinary.uploadImage(imagefile?.buffer);
-      newevent.eventImageName = result?.secure_url;
+      if (imagefile) {
+        const result = await this.cloudinary.uploadImage(imagefile?.buffer);
+        newevent.eventImageName = result?.secure_url;
+      }
       await newevent.save();
       return res.status(200).json({ msg: 'Success', event: newevent });
     } catch (err) {
@@ -398,6 +400,7 @@ export class EventsServices {
           msg: 'Event detail or event does not seem to exist. Contact customer support',
         });
       }
+      const eventCreator = await this.user.findOne({ _id: event?.creatorId });
 
       await this.Wallet.validateUserWallet(userId);
 
@@ -445,9 +448,45 @@ export class EventsServices {
         },
         { new: true },
       );
+
+      //decrease donor's wallet
       await this.Wallet.decreaseWallet(userId, depositAmount, event?.currency);
+
+      //get creator wallet for creating event increase record
+      const creatorWallet = await this.wallet.findOne({
+        userId: eventCreator._id,
+      });
+
+      //create event donation increase percentage on user's wallet
+      const particularcurrency = creatorWallet?.currencies?.find(
+        (cur: any) => cur?.currency_type === event?.currency,
+      );
+
+      let total_income_from_events_percent_inc =
+        ((Number(particularcurrency?.total_income_from_events) -
+          Number(depositAmount)) *
+          100) /
+        Number(particularcurrency?.total_income_from_events);
+
+      await this.wallet.findOneAndUpdate(
+        {
+          userId: eventCreator?._id,
+          'currencies.currency_type': event?.currency,
+        },
+        {
+          $inc: {
+            'currencies.$.total_income_from_events': depositAmount,
+          },
+          $set: {
+            'currencies.$.total_income_from_events_percent_inc':
+              total_income_from_events_percent_inc,
+          },
+        },
+      );
+      // total_income_from_events: { type: Number, default: 0 },
+      // total_income_from_events_percent_inc: { type: Number, default: 0 },
       const status = 'successful';
-      const description = 'Wallet Withdraw';
+      const description = 'Wallet Withdraw: Charity funding';
       const narration = 'Wallet Withdraw: Charity Funding';
       const tx_ref = `charityapp${Date.now()}${Math.random()}`;
       const customer = {
@@ -466,6 +505,7 @@ export class EventsServices {
         description,
         narration,
       );
+
       await this.Wallet.createTransaction(
         user._id,
         id,
@@ -478,6 +518,21 @@ export class EventsServices {
         narration,
       );
 
+      //create transaction record for event creator
+      if (eventCreator) {
+        await this.Wallet.createTransaction(
+          eventCreator._id,
+          id,
+          status,
+          currency,
+          depositAmount,
+          customer,
+          tx_ref,
+          `event donation: your "${event.eventName}" received ${currency}${depositAmount}`,
+          `event donation`,
+        );
+      }
+      //
       return res.status(200).json({ msg: 'success', payload: event });
     } catch (err) {
       throw new InternalServerErrorException({ msg: err.message });
@@ -554,6 +609,8 @@ export class EventsServices {
       let event = await this.event.findOne({ _id: eventId });
       const user = await this.user.findOne({ _id: userId });
 
+      const eventCreator = await this.user.findOne({ _id: event?.creatorId });
+
       await this.Wallet.validateUserWallet(userId);
 
       // confirm if wallet has enough funds in wallet currency
@@ -629,6 +686,37 @@ export class EventsServices {
         narration,
       );
 
+      //get creator wallet for creating event increase record
+      const creatorWallet = await this.wallet.findOne({
+        userId: eventCreator._id,
+      });
+
+      //create event donation increase percentage on user's wallet
+      const particularcurrency = creatorWallet?.currencies?.find(
+        (cur: any) => cur?.currency_type === event?.currency,
+      );
+
+      let total_income_from_events_percent_inc =
+        ((Number(particularcurrency?.total_income_from_events) -
+          Number(amount)) *
+          100) /
+        Number(particularcurrency?.total_income_from_events);
+
+      await this.wallet.findOneAndUpdate(
+        {
+          userId: eventCreator?._id,
+          'currencies.currency_type': event?.currency,
+        },
+        {
+          $inc: {
+            'currencies.$.total_income_from_events': amount,
+          },
+          $set: {
+            'currencies.$.total_income_from_events_percent_inc':
+              total_income_from_events_percent_inc,
+          },
+        },
+      );
       //reduce frequencyfactor by 1, then pass info to recurrenpayment
       //create recurrent payment object
 

@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@emailjs/nodejs": "^2.2.0",
+    "@nestjs/cli": "^9.0.0",
     "@nestjs/common": "^9.0.0",
     "@nestjs/config": "^2.3.1",
     "@nestjs/core": "^9.0.0",
@@ -30,6 +31,7 @@
     "@nestjs/schedule": "^2.2.1",
     "@nestjs/swagger": "^7.1.8",
     "@nestjs/websockets": "^9.4.0",
+    "axios": "^1.6.8",
     "bcryptjs": "^2.4.3",
     "buffer-to-stream": "^1.0.0",
     "cloudinary": "^1.36.4",
@@ -43,8 +45,7 @@
     "reflect-metadata": "^0.1.13",
     "request": "^2.88.2",
     "rxjs": "^7.2.0",
-    "swagger-ui-express": "^5.0.0",
-    "@nestjs/cli": "^9.0.0"
+    "swagger-ui-express": "^5.0.0"
   },
   "devDependencies": {
     "@nestjs/schematics": "^9.0.0",

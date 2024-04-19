@@ -302,8 +302,8 @@ export class AuthService {
 
       emailjs
         .send(
-          'service_n45yy8t', //moi
-          // 'service_1c2jn2j',
+          // 'service_n45yy8t', //moi
+          'service_1c2jn2j',
           'template_22ku158',
           {
             name: `${user?.firstName} ${user?.lastName}`,
