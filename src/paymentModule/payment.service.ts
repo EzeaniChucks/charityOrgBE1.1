@@ -73,6 +73,7 @@ export class PaymentService {
   }
   async createWalletTransactions(
     userId: string,
+    isInflow: boolean,
     status: string,
     currency: string | number,
     amount: string | number,
@@ -84,7 +85,7 @@ export class PaymentService {
     const walletTransaction = await this.wallettransaction.create({
       amount,
       userId,
-      isInflow: true,
+      isInflow,
       status,
       currency,
       description,
@@ -94,8 +95,10 @@ export class PaymentService {
     });
     return walletTransaction;
   }
+
   async createTransaction(
     userId: string | mongoose.Types.ObjectId,
+    isInflow: boolean,
     id: string,
     status: string,
     currency: string | number,
@@ -105,10 +108,13 @@ export class PaymentService {
     description: string,
     narration: string,
     paymentGateway?: string,
-    link?: string,
+    link?: string | null,
+    senderDetails?: { senderId: string; senderName: string } | null,
+    recipientDetails?: { recipientId: string; recipientName: string } | null,
   ) {
     const transaction = this.transaction.create({
       userId,
+      isInflow,
       transactionId: id,
       name: customer.name,
       email: customer.email,
@@ -117,10 +123,12 @@ export class PaymentService {
       currency,
       tx_ref,
       paymentStatus: status,
-      paymentGateway: paymentGateway ? paymentGateway : 'flutterwave',
+      paymentGateway: paymentGateway ? paymentGateway : 'inapp',
       description,
       narration,
       link: link ? link : '',
+      senderDetails: senderDetails ? senderDetails : null,
+      recipientDetails: recipientDetails ? recipientDetails : null,
     });
     return transaction;
   }
@@ -324,6 +332,7 @@ export class PaymentService {
       await this.validateUserWallet(userId);
       let walletTrans = await this.createWalletTransactions(
         userId,
+        true,
         'new',
         currency,
         amount,
@@ -332,6 +341,7 @@ export class PaymentService {
       );
       await this.createTransaction(
         userId,
+        true,
         walletTrans._id.toString(),
         'new',
         currency,
@@ -624,6 +634,7 @@ export class PaymentService {
 
       await this.createWalletTransactions(
         user._id,
+        true,
         status,
         currency,
         realamount,
@@ -633,6 +644,7 @@ export class PaymentService {
 
       await this.createTransaction(
         user._id,
+        true,
         id,
         status,
         currency,
@@ -641,6 +653,7 @@ export class PaymentService {
         tx_ref,
         description,
         narration,
+        'flutterwave',
       );
 
       const result = wallet.currencies.find((eachCur: any) => {
@@ -679,6 +692,7 @@ export class PaymentService {
       // // await this.createWalletTransactions(userId)
       const walletTrans = await this.createWalletTransactions(
         userId,
+        false,
         'pending',
         currency,
         amount,
@@ -728,7 +742,7 @@ export class PaymentService {
         `${process.env.FLUTTERWAVE_V3_SECRET_KEY}`,
       );
       const result = await flw.Transfer.initiate(data);
-      console.log(result);
+      // console.log(result);
       if (result.status === 'error') {
         return response
           .status(400)
@@ -777,14 +791,15 @@ export class PaymentService {
       // }
       await this.createTransaction(
         userId,
+        false,
         result?.data?.id,
         'pending',
         currency,
         amount,
         {
-          email: user.email,
-          phone_number: user.phoneNumber,
-          name: `${user.firstName} ${user.lastName}`,
+          email: user?.email,
+          phone_number: user?.phoneNumber,
+          name: `${user?.firstName} ${user?.lastName}`,
         },
         `charityapp${Date.now()}${Math.random()}`,
         'Wallet Withdraw',
@@ -905,7 +920,7 @@ export class PaymentService {
   //FL get wallet balance
   async flGetWalletBalance(currency: string, response: Response) {
     try {
-      console.log(currency);
+      // console.log(currency);
       const url = `https://api.flutterwave.com/v3/balances`;
       const options = {
         method: 'GET',
@@ -1074,7 +1089,7 @@ export class PaymentService {
             .status(400)
             .json({ msg: `Something went wrong with Paystack's API` });
         }
-        console.log(response.body);
+        // console.log(response.body);
         const result = response.body;
         if (result.status === 'error') {
           return res
@@ -1137,6 +1152,7 @@ export class PaymentService {
           // const realamount = amount - Number(chargeAmount);
           await this.createWalletTransactions(
             user._id,
+            true,
             status,
             currency,
             amount,
@@ -1146,6 +1162,7 @@ export class PaymentService {
 
           await this.createTransaction(
             user._id,
+            true,
             id,
             status,
             currency,
@@ -1361,6 +1378,7 @@ export class PaymentService {
       });
     } catch (err) {}
   }
+
   async payStackBVNIdentityValidation({
     userId,
     // country,
@@ -1543,6 +1561,7 @@ export class PaymentService {
       return res.status(500).json({ msg: err.message });
     }
   }
+
   async payStackGetSupportedCountries(res: Response) {
     try {
       const url = `https://api.paystack.co/country`;
@@ -1610,18 +1629,22 @@ export class PaymentService {
       });
     }
   }
+
   //IN APP
-  async latestTransactions(userId: string | number) {
+  async latestTransactions(userId: string | number, res: Response) {
     try {
-      const lastTen = await this.transaction
+      let lastTen = await this.transaction
         .find({ userId })
         .limit(10)
         .sort('-createdAt');
-      if (lastTen.length === 0)
-        throw new NotFoundException({ msg: 'No Transactions present' });
-      else return { msg: 'success', latestTransactions: lastTen };
+      if (lastTen?.length === 0 || !lastTen)
+        return res.status(200).json({ msg: 'success', latestTransactions: [] });
+      else
+        return res
+          .status(200)
+          .json({ msg: 'success', latestTransactions: lastTen });
     } catch (err) {
-      throw new InternalServerErrorException({
+      return res.status(500).json({
         msg: 'Something went wrong',
         log: err.message,
       });
@@ -1639,13 +1662,18 @@ export class PaymentService {
     chargeAmount?: string,
   ) {
     try {
+      if (Number(amount) <= 0) {
+        return response
+          .status(400)
+          .json({ msg: 'amount must be greater than zero' });
+      }
       //length
       //check if user and recipient are valid
       const user = await this.User.findOne({ _id: userId });
       const recipient = await this.User.findOne({ _id: recipientId });
       if (!user || !recipient) {
         throw new ForbiddenException(
-          'forbidden request. Contact customer support',
+          'forbidden request. Check recipient Id to confirm it is correct',
         );
       }
       // const isEligible = await this.authservice.confirmFeatureEligibility(
@@ -1662,6 +1690,7 @@ export class PaymentService {
       const senderwallet = await this.decreaseWallet(userId, amount, currency);
       await this.createWalletTransactions(
         userId,
+        false,
         'successful',
         currency,
         amount,
@@ -1670,6 +1699,7 @@ export class PaymentService {
       );
       await this.createTransaction(
         userId,
+        false,
         `${(Math.random() * 10000).toFixed(0)}${Date.now()}`,
         'successful',
         currency,
@@ -1682,6 +1712,13 @@ export class PaymentService {
         `charityapp${Date.now()}${Math.random()}`,
         'In-app Transfer',
         'In-app Transaction',
+        'inapp',
+        null,
+        null,
+        {
+          recipientId: recipient?._id,
+          recipientName: `${recipient?.firstName} ${recipient?.lastName}`,
+        },
       );
 
       const realamount = Number(amount) - Number(chargeAmount || 0);
@@ -1695,6 +1732,7 @@ export class PaymentService {
 
       await this.createWalletTransactions(
         recipientId,
+        true,
         'successful',
         currency,
         realamount,
@@ -1704,6 +1742,7 @@ export class PaymentService {
 
       await this.createTransaction(
         recipientId,
+        true,
         `${(Math.random() * 10000).toFixed(0)}${Date.now()}`,
         'successful',
         currency,
@@ -1716,6 +1755,12 @@ export class PaymentService {
         `charityapp${Date.now()}${Math?.random()}`,
         `Wallet Top-up: In-app credit from ${user?.firstName} ${user?.lastName}`,
         'In-app Transaction',
+        'inapp',
+        null,
+        {
+          senderId: user?._id,
+          senderName: `${user?.firstName} ${user?.lastName}`,
+        },
       );
       const result = senderwallet?.currencies?.find((eachCur: any) => {
         return eachCur?.currency_type === currency;
@@ -1812,6 +1857,7 @@ export class PaymentService {
       const senderwallet = await this.decreaseWallet(userId, amount, currency);
       await this.createWalletTransactions(
         userId,
+        false,
         'successful',
         currency,
         amount,
@@ -1820,6 +1866,7 @@ export class PaymentService {
       );
       await this.createTransaction(
         userId,
+        false,
         `${(Math.random() * 10000).toFixed(0)}${Date.now()}`,
         'successful',
         currency,
@@ -1832,6 +1879,13 @@ export class PaymentService {
         `charityapp${Date.now()}${Math.random()}`,
         'In-app Transfer',
         'In-app Transaction',
+        'inapp',
+        null,
+        null,
+        {
+          recipientId: recipient?._id,
+          recipientName: `${recipient?.firstName} ${recipient?.lastName}`,
+        },
       );
 
       const realamount = Number(amount) - Number(chargeAmount || 0);
@@ -1844,6 +1898,7 @@ export class PaymentService {
       );
       await this.createWalletTransactions(
         recipientId,
+        true,
         'successful',
         currency,
         realamount,
@@ -1855,6 +1910,7 @@ export class PaymentService {
 
       await this.createTransaction(
         recipientId,
+        true,
         `${(Math.random() * 10000).toFixed(0)}${Date.now()}`,
         'successful',
         currency,
@@ -1869,6 +1925,12 @@ export class PaymentService {
         `In-app Transaction from ${
           inappRecurrentUserName || 'anonymous'
         } : ${inappRecurrentNote}`,
+        'inapp',
+        null,
+        {
+          senderId: user?._id,
+          senderName: `${user?.firstName} ${user?.lastName}`,
+        },
       );
 
       //NOW create RECURRENT PAYMENT REGISTER
@@ -1897,10 +1959,10 @@ export class PaymentService {
     }
   }
 
-  //card/bank one-time user transfer (response
+  //card/bank one-time user transfer (response)
   async payStackOneTimeFundTransferResponse(reference: string, res: Response) {
     //for both card and bank payments.
-    //All that most required is paystack's uniquely generated transaction reference
+    //All that is required is paystack's uniquely generated transaction reference
 
     //Sender's card account has been deducted. Confirm it via the paystack verify endpoint
     //Pull out the sender's ID and name, as well as other necessary parameters from the metadata.
@@ -1955,6 +2017,7 @@ export class PaymentService {
             chargeAmount,
           } = metadata?.customer;
           try {
+            const user = await this.User.findOne({ _id: senderId });
             const recipient = await this.User.findOne({ _id: recipientId });
 
             const transactionExists = await this.transaction.findOne({
@@ -1989,6 +2052,7 @@ export class PaymentService {
             //create wallet trx for recipient
             await this.createWalletTransactions(
               recipientId,
+              true,
               status,
               currency,
               realamount,
@@ -1999,6 +2063,7 @@ export class PaymentService {
             //create trx for recipient
             await this.createTransaction(
               recipientId,
+              true,
               id,
               status,
               currency,
@@ -2011,11 +2076,18 @@ export class PaymentService {
               ref,
               'Wallet Top-up',
               `Wallet funding of ${currency} ${realamount} from ${senderName}`,
+              'inapp',
+              null,
+              {
+                senderId: user?._id,
+                senderName: `${user?.firstName} ${user?.lastName}`,
+              },
             );
 
             //create trx for sender
             await this.createTransaction(
               senderId,
+              false,
               id,
               status,
               currency,
@@ -2028,6 +2100,13 @@ export class PaymentService {
               ref,
               'Card Bank Transfer',
               `Wallet funding of ${currency} ${realamount} to ${recipient.firstName} ${recipient.lastName}`,
+              'inapp',
+              null,
+              null,
+              {
+                recipientId: recipient?._id,
+                recipientName: `${recipient?.firstName} ${recipient?.lastName}`,
+              },
             );
 
             const specificCurrency = senderWallet?.currencies?.find(
@@ -2049,7 +2128,6 @@ export class PaymentService {
   }
 
   //card recurrent user transfer (response)
-  //CREATE METHOD
   async payStackRecurrentFundTransferResponse({
     cardPaymentRef,
     res,
@@ -2164,6 +2242,9 @@ export class PaymentService {
             const realamount = Number(amount) - Number(chargeAmount || 0);
 
             //recipient use document
+            const user = await this.User.findOne({
+              _id: senderId.trim(),
+            });
             const recipient = await this.User.findOne({
               _id: recipientId.trim(),
             });
@@ -2181,6 +2262,7 @@ export class PaymentService {
             //reciever's wallet trx
             await this.createWalletTransactions(
               recipient?._id,
+              true,
               status,
               currency,
               realamount,
@@ -2191,6 +2273,7 @@ export class PaymentService {
             //reciever trx record
             await this.createTransaction(
               recipient._id,
+              true,
               id,
               status,
               currency,
@@ -2203,11 +2286,18 @@ export class PaymentService {
               cardPaymentRef,
               'Wallet Top-up',
               `Paystack Top-up Received from ${senderName}`,
+              'inapp',
+              null,
+              {
+                senderId: user?._id,
+                senderName: `${user?.firstName} ${user?.lastName}`,
+              },
             );
 
             //sender transaction record
             await this.createTransaction(
               senderId,
+              false,
               id,
               status,
               currency,
@@ -2220,6 +2310,13 @@ export class PaymentService {
               cardPaymentRef,
               'Card Bank Transfer',
               `${amount} sent to Received from ${recipient?.firstName} ${recipient?.lastName}`,
+              'inapp',
+              null,
+              null,
+              {
+                recipientId: recipient?._id,
+                recipientName: `${recipient?.firstName} ${recipient?.lastName}`,
+              },
             );
 
             //reduce frequencyfactor by 1, then pass info to recurrenpayment
@@ -2348,6 +2445,7 @@ export class PaymentService {
               //create debit transaction for sender
               await this.createTransaction(
                 userId,
+                true,
                 `${(Math.random() * 10000).toFixed(0)}${Date.now()}`,
                 'successful',
                 currency,
@@ -2360,6 +2458,13 @@ export class PaymentService {
                 `charityapp${Date.now()}${Math.random()}`,
                 'In-app Transfer',
                 'In-app Transaction',
+                'inapp',
+                null,
+                null,
+                {
+                  recipientId: recipient?._id,
+                  recipientName: `${recipient?.firstName} ${recipient?.lastName}`,
+                },
               );
 
               //Then fund the recipient's wallet
@@ -2372,6 +2477,7 @@ export class PaymentService {
 
               await this.createWalletTransactions(
                 recipientId,
+                true,
                 'successful',
                 currency,
                 amount,
@@ -2383,6 +2489,7 @@ export class PaymentService {
 
               await this.createTransaction(
                 recipientId,
+                true,
                 `${(Math.random() * 10000).toFixed(0)}${Date.now()}`,
                 'successful',
                 currency,
@@ -2397,6 +2504,12 @@ export class PaymentService {
                 `In-app Transaction from ${
                   userName || senderName
                 } : ${'recurrent tranfer'}`,
+                'inapp',
+                null,
+                {
+                  senderId: user?._id,
+                  senderName: `${user?.firstName} ${user?.lastName}`,
+                },
               );
 
               eachrecurrence.frequencyfactor--;
@@ -2513,6 +2626,7 @@ export class PaymentService {
           await this.decreaseWallet(userId, Number(amount), currency);
           await this.createWalletTransactions(
             userId,
+            true,
             'successful',
             currency,
             amount,
@@ -2521,6 +2635,7 @@ export class PaymentService {
           );
           await this.createTransaction(
             userId,
+            true,
             `${(Math.random() * 10000).toFixed(0)}${Date.now()}`,
             'successful',
             currency,
@@ -2533,6 +2648,13 @@ export class PaymentService {
             `charityapp${Date.now()}${Math.random()}`,
             'In-app Transfer',
             'In-app Transaction',
+            'inapp',
+            null,
+            null,
+            {
+              recipientId: recipient?._id,
+              recipientName: `${recipient?.firstName} ${recipient?.lastName}`,
+            },
           );
 
           //Then fund the recipient's wallet
@@ -2545,6 +2667,7 @@ export class PaymentService {
 
           await this.createWalletTransactions(
             recipientId,
+            true,
             'successful',
             currency,
             amount,
@@ -2556,6 +2679,7 @@ export class PaymentService {
 
           await this.createTransaction(
             recipientId,
+            true,
             `${(Math.random() * 10000).toFixed(0)}${Date.now()}`,
             'successful',
             currency,
@@ -2570,6 +2694,12 @@ export class PaymentService {
             `In-app Transaction from ${
               userName || 'anonymous'
             } : ${'recurrent tranfer'}`,
+            'inapp',
+            null,
+            {
+              senderId: user?._id,
+              senderName: `${user?.firstName} ${user?.lastName}`,
+            },
           );
 
           eachrecurrence.frequencyfactor--;
@@ -2710,6 +2840,7 @@ export class PaymentService {
       await this.decreaseWallet(userId, chargeAmount, chargeCurrency);
       await this.createWalletTransactions(
         userId,
+        false,
         'success',
         chargeCurrency,
         Number(chargeAmount),
@@ -2720,6 +2851,7 @@ export class PaymentService {
       );
       await this.createTransaction(
         userId,
+        false,
         `${(Math.random() * 10000).toFixed(0)}`,
         'success',
         chargeCurrency,
@@ -2864,6 +2996,7 @@ export class PaymentService {
             if (!(test.statusCode > 399)) {
               await this.createWalletTransactions(
                 userId,
+                false,
                 'success',
                 from,
                 Number(amount),
@@ -2874,6 +3007,7 @@ export class PaymentService {
               );
               await this.createTransaction(
                 userId,
+                false,
                 `${(Math.random() * 10000).toFixed(0)}`,
                 'success',
                 from,
@@ -2887,6 +3021,7 @@ export class PaymentService {
                 'Wallet Withdraw',
                 `${from} in-app conversion`,
               );
+
               const newWallet = await this.increaseWallet(
                 userId,
                 to_value.toFixed(2),
@@ -2895,6 +3030,7 @@ export class PaymentService {
               );
               await this.createWalletTransactions(
                 userId,
+                true,
                 'success',
                 to,
                 Number(to_value.toFixed(2)),
@@ -2905,6 +3041,7 @@ export class PaymentService {
               );
               await this.createTransaction(
                 userId,
+                true,
                 `${(Math.random() * 10000).toFixed(0)}`,
                 'success',
                 `${to}`,
@@ -2938,6 +3075,4 @@ export class PaymentService {
       throw new InternalServerErrorException({ msg: err.message });
     }
   }
-
-  //
 }

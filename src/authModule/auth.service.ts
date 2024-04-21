@@ -20,6 +20,7 @@ import { Request, Response, response } from 'express';
 import { attachCookiesToResponse, jwtIsValid } from 'src/util';
 import { CloudinaryService } from 'src/cloudinary/cloudinary.services';
 import * as request from 'request';
+import * as jwt from 'jsonwebtoken';
 
 @Injectable()
 export class AuthService {
@@ -84,6 +85,7 @@ export class AuthService {
     if (!email || !password) {
       return res.status(400).json({ msg: 'Incomplete credentials' });
     }
+    console.log(email, password);
     try {
       const user = await this.User.findOne({ email });
       if (!user) {
@@ -92,7 +94,6 @@ export class AuthService {
           .json({ msg: 'This user does not exist. Try registering' });
       }
       const isPassCorrect = await bcrypt.compare(password, user.password);
-
       if (isPassCorrect) {
         if (user.isVerified) {
           const {
@@ -105,6 +106,17 @@ export class AuthService {
             isAdmin,
           } = user;
 
+          const token = await jwt.sign(
+            {
+              _id,
+              email,
+            },
+            process.env.JWT_SECRET,
+            {
+              expiresIn: process.env.JWT_LIFETIME,
+            },
+          );
+
           await attachCookiesToResponse(res, {
             _id,
             firstName,
@@ -115,7 +127,11 @@ export class AuthService {
 
           return res.status(201).json({
             msg: 'success',
-            user: { _id, email, firstName, lastName, phoneNumber, isVerified },
+            payload: {
+              _id,
+              email,
+              token,
+            },
           });
         } else {
           return res.status(400).json({
@@ -283,6 +299,7 @@ export class AuthService {
 
   async completeRegistration(userId: string, res: Response) {
     try {
+      console.log(userId);
       const user = await this.User.findOne({ _id: userId });
       if (!user) {
         return res.status(401).json({
@@ -297,18 +314,26 @@ export class AuthService {
         { _id: userId },
         { $set: { verificationToken } },
       );
-
-      const { _id, email, firstName, lastName, phoneNumber, isVerified } = user;
+      const { _id, email } = user;
+      const token = await jwt.sign(
+        {
+          _id,
+          email,
+        },
+        process.env.JWT_SECRET,
+        {
+          expiresIn: process.env.JWT_LIFETIME,
+        },
+      );
 
       emailjs
         .send(
-          // 'service_n45yy8t', //moi
-          'service_1c2jn2j',
+          'service_n45yy8t', //moi
+          // 'service_1c2jn2j',
           'template_22ku158',
           {
             name: `${user?.firstName} ${user?.lastName}`,
-            email: `${user.email}`,
-            // email: 'testingtestguy1@gmail.com',
+            email: `${user?.email}`,
             message: `
                     <div>
                       <h4>Email account verification</h4>
@@ -329,18 +354,17 @@ export class AuthService {
               payload: {
                 _id,
                 email,
-                firstName,
-                lastName,
-                phoneNumber,
-                isVerified,
+                token,
               },
             });
           },
           (err) => {
+            console.log('email err', err);
             return res.status(400).json({ msg: 'unsuccessful', payload: err });
           },
         );
     } catch (err) {
+      console.log('normal err', err);
       return res.status(500).json({ msg: err.message });
     }
   }
@@ -549,7 +573,7 @@ export class AuthService {
           isVerified,
           isAdmin,
           subscription,
-          bundle
+          bundle,
         },
       });
     } catch (err) {
@@ -643,7 +667,7 @@ export class AuthService {
         msg: 'Could not withdraw from wallet. Please refresh page and try again or contact customer support',
       });
     }
-    //create wallet transaction and transaction (type of transfer to ${mainEventName}, as would appear in tx history)
+    //create wallet transaction and transaction (type of transfer is ${mainEventName}, as would appear in tx history)
     const status = 'successful';
     const description = subType
       ? `${subType} Subscription Purchase`
@@ -661,6 +685,7 @@ export class AuthService {
 
     await this.paymentservice.createWalletTransactions(
       userId,
+      false,
       status,
       currency,
       amount,
@@ -669,6 +694,7 @@ export class AuthService {
     );
     await this.paymentservice.createTransaction(
       userId,
+      false,
       id,
       status,
       currency,
@@ -1571,7 +1597,7 @@ export class AuthService {
       throw new InternalServerErrorException({ msg: err.message });
     }
   }
-  
+
   async acceptVerificationDocuments(files: any, userId: string, res: Response) {
     try {
       const userExist = await this.User.findOne({ _id: userId });

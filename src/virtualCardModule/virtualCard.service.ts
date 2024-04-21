@@ -137,6 +137,7 @@ export class VirtualCardServices {
            // create trx records
            await this.payment.createWalletTransactions(
              userId,
+             false,
              'successful',
              currency,
              amount,
@@ -146,6 +147,7 @@ export class VirtualCardServices {
 
            await this.payment.createTransaction(
              userId,
+             false,
              `${(Math.random() * 10000).toFixed(0)}${Date.now()}`,
              'successful',
              currency,
@@ -158,6 +160,7 @@ export class VirtualCardServices {
              `charityapp${Date?.now()}${Math?.random()}`,
              'In-app Transfer: Virtual Card Funding',
              'In-app Transaction: Virtual Card Funding',
+             
            );
           
           return res
@@ -346,6 +349,7 @@ export class VirtualCardServices {
           // allow funding if yes
           await paymentobj.createWalletTransactions(
             userId,
+            false,
             'successful',
             currency,
             amount,
@@ -354,6 +358,7 @@ export class VirtualCardServices {
           );
           await paymentobj.createTransaction(
             userId,
+            false,
             `${(Math.random() * 10000).toFixed(0)}${Date.now()}`,
             'successful',
             currency,
@@ -507,6 +512,7 @@ export class VirtualCardServices {
           await payment.increaseWallet(userId, Number(amount), currency, null);
           await this.payment.createWalletTransactions(
             userId,
+            true,
             'successful',
             currency,
             amount,
@@ -515,6 +521,7 @@ export class VirtualCardServices {
           );
           await this.payment.createTransaction(
             userId,
+            true,
             `${(Math.random() * 10000).toFixed(0)}${Date.now()}`,
             'successful',
             currency,
@@ -549,17 +556,6 @@ export class VirtualCardServices {
           return res
             .status(200)
             .json({ msg: 'successful', payload: virtualcards });
-          // return res.status(200).json({
-          //   msg: 'successful',
-          //   payload: {
-          //     name: cardData?.name_on_card,
-          //     cvv: cardData?.cvv,
-          //     cardnumber: cardData?.card_pan,
-          //     cardtype: cardData?.card_type,
-          //     status: cardData?.status,
-          //     cardBalance: `${cardData?.currency} ${cardData?.balance}`,
-          //   },
-          // });
         } catch (err) {
           return res.status(500).json({ msg: err?.message });
         }

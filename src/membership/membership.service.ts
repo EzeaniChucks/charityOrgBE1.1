@@ -61,6 +61,7 @@ export class MembershipService {
                 //wallet trx
                 await this.walletservice.createWalletTransactions(
                   creatorId,
+                  true,
                   'successful',
                   currency,
                   amount,
@@ -70,6 +71,7 @@ export class MembershipService {
                 //general trx
                 await this.walletservice.createTransaction(
                   creatorId,
+                  true,
                   `${(Math.random() * 10000).toFixed(0)}${Date.now()}`,
                   'successful',
                   currency,
@@ -82,6 +84,12 @@ export class MembershipService {
                   `charityapp${Date.now()}${Math.random()}`,
                   'Wallet Top-up',
                   `Membership remission of ${currency} ${amount} from ${memberName} on your membership: "${title}"`,
+                  'inapp_membership',
+                  null,
+                  {
+                    senderId: `${memberId}`,
+                    senderName: `membership&${memberName}`,
+                  },
                 );
 
                 //member's record
@@ -90,6 +98,7 @@ export class MembershipService {
                 //wallet trx
                 await this.walletservice.createWalletTransactions(
                   memberId,
+                  false,
                   'successful',
                   currency,
                   amount,
@@ -100,6 +109,7 @@ export class MembershipService {
                 //general trx
                 await this.walletservice.createTransaction(
                   memberId,
+                  false,
                   `${(Math.random() * 10000).toFixed(0)}${Date.now()}`,
                   'successful',
                   currency,
@@ -112,6 +122,13 @@ export class MembershipService {
                   `charityapp${Date.now()}${Math.random()}`,
                   'Wallet Withdraw',
                   `Membership remission of ${currency} ${amount} from you to a membership you belong to: "${title}"`,
+                  'inapp_membership',
+                  null,
+                  null,
+                  {
+                    recipientId: `${creator?._id}`,
+                    recipientName: `membership&${creator?.firstName} ${creator?.lastName}`,
+                  },
                 );
 
                 //lastly, push new charge date into the member's payment plan (marked by the chargeDate field)
@@ -143,6 +160,7 @@ export class MembershipService {
       console.log({ msg: `server error: ${err?.message}` });
     }
   }
+
   // export const membershipSchema = new mongoose.Schema({
   //   creatorId: { type: mongoose.Schema.Types.ObjectId },
   //   title: { type: String, required: true, unique:true },

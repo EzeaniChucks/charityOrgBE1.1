@@ -101,8 +101,8 @@ export class NotifService {
   async getNotifications(userId: string) {
     try {
       const notifs = await this.notifications.find({ recipientId: userId });
-      if (!notifs) {
-        throw new BadRequestException({ msg: 'Something went wrong' });
+      if (notifs?.length === 0 || !notifs) {
+        return { msg: 'success', payload: [] };
       }
       return { msg: 'success', payload:notifs };
     } catch (err) {

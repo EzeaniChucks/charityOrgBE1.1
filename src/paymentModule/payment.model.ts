@@ -15,6 +15,7 @@ export const transactionSchema = new mongoose.Schema(
       required: [true, 'Transaction reference is required'],
       trim: true,
     },
+    isInflow: { type: Boolean, default: false },
     name: {
       type: String,
       required: [true, 'name is required'],
@@ -59,6 +60,14 @@ export const transactionSchema = new mongoose.Schema(
         'Coinbase',
         'paystack',
         'Paystack',
+        'Inapp',
+        'inapp',
+        'inapp_escrow',
+        'Inapp_Escrow',
+        'inapp_event',
+        'Inapp_Event',
+        'inapp_Membership',
+        'Inapp_membership',
       ],
     },
     description: {
@@ -72,6 +81,14 @@ export const transactionSchema = new mongoose.Schema(
     link: {
       type: String,
       default: '',
+    },
+    senderDetails: {
+      senderId: { type: mongoose.Schema.Types.ObjectId },
+      senderName: { type: String, default: '' },
+    },
+    recipientDetails: {
+      recipientId: { type: mongoose.Schema.Types.ObjectId },
+      recipientName: { type: String, default: '' },
     },
   },
   { timestamps: true },

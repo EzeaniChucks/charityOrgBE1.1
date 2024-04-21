@@ -42,6 +42,7 @@ export class PaymentController {
   }
   public createWalletTransaction(
     userId: string,
+    isInflow: boolean,
     status: string,
     currency: string | number,
     amount: string | number,
@@ -50,6 +51,7 @@ export class PaymentController {
   ) {
     return this.paymentservice.createWalletTransactions(
       userId,
+      isInflow,
       status,
       currency,
       amount,
@@ -59,6 +61,7 @@ export class PaymentController {
   }
   public createTransaction(
     userId: string,
+    isInflow: boolean,
     id: string,
     status: string,
     currency: string | number,
@@ -67,9 +70,14 @@ export class PaymentController {
     tx_ref: string,
     description: string,
     narration: string,
+    paymentGateway?: string,
+    link?: string | null,
+    senderDetails?: { senderId: string; senderName: string } | null,
+    recipientDetails?: { recipientId: string; recipientName: string } | null,
   ) {
     return this.paymentservice.createTransaction(
       userId,
+      isInflow,
       id,
       status,
       currency,
@@ -78,6 +86,10 @@ export class PaymentController {
       tx_ref,
       description,
       narration,
+      paymentGateway ? paymentGateway : 'inapp',
+      link ? link : null,
+      senderDetails ? senderDetails : null,
+      recipientDetails ? recipientDetails : null,
     );
   }
   public updateWallet(
@@ -370,8 +382,8 @@ export class PaymentController {
 
   @Post('latest_transactions')
   @ApiTags('Payment')
-  latestTransactions(@Body('userId') userId: string) {
-    return this.paymentservice.latestTransactions(userId);
+  latestTransactions(@Body('userId') userId: string, @Res() res: Response) {
+    return this.paymentservice.latestTransactions(userId, res);
   }
 
   //wallet one-time transfer to user

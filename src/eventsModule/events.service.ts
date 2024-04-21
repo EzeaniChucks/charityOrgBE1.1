@@ -110,7 +110,7 @@ export class EventsServices {
               const userName = user
                 ? `${user?.firstName} ${user?.lastName}`
                 : 'Anonymous';
-              await this.event.findOneAndUpdate(
+              const event = await this.event.findOneAndUpdate(
                 { _id: eventId },
                 {
                   $push: {
@@ -154,6 +154,7 @@ export class EventsServices {
 
               await this.Wallet.createTransaction(
                 userId,
+                false,
                 id,
                 status,
                 currency,
@@ -162,6 +163,13 @@ export class EventsServices {
                 tx_ref,
                 description,
                 narration,
+                'paystack',
+                null,
+                null,
+                {
+                  recipientId: `${eventId}`,
+                  recipientName: `charity&${event?.eventName}`,
+                },
               );
             } catch (err) {
               console.log({
@@ -262,6 +270,7 @@ export class EventsServices {
 
           await this.Wallet.createWalletTransactions(
             user._id,
+            false,
             status,
             currency,
             amount,
@@ -271,6 +280,7 @@ export class EventsServices {
 
           await this.Wallet.createTransaction(
             user._id,
+            false,
             id,
             status,
             currency,
@@ -375,7 +385,6 @@ export class EventsServices {
       return res.status(500).json({ msg: err.message });
     }
   }
-
   //one-time wallet payment
   async createOneTimePayment(
     userId: string,
@@ -499,6 +508,7 @@ export class EventsServices {
 
       await this.Wallet.createWalletTransactions(
         user._id,
+        false,
         status,
         currency,
         depositAmount,
@@ -508,6 +518,7 @@ export class EventsServices {
 
       await this.Wallet.createTransaction(
         user._id,
+        false,
         id,
         status,
         currency,
@@ -516,12 +527,20 @@ export class EventsServices {
         tx_ref,
         description,
         narration,
+        'inapp_event',
+        null,
+        null,
+        {
+          recipientId: eventId,
+          recipientName: `charity&${event?.eventName}`,
+        },
       );
 
       //create transaction record for event creator
       if (eventCreator) {
         await this.Wallet.createTransaction(
           eventCreator._id,
+          true,
           id,
           status,
           currency,
@@ -530,6 +549,12 @@ export class EventsServices {
           tx_ref,
           `event donation: your "${event.eventName}" received ${currency}${depositAmount}`,
           `event donation`,
+          'inapp_event',
+          null,
+          {
+            senderId: user?._id,
+            senderName: `${user?.firstName} ${user?.lastName}`,
+          },
         );
       }
       //
@@ -667,6 +692,7 @@ export class EventsServices {
       const { currency } = event;
       await this.Wallet.createWalletTransactions(
         user._id,
+        false,
         status,
         currency,
         amount,
@@ -676,6 +702,7 @@ export class EventsServices {
 
       await this.Wallet.createTransaction(
         user._id,
+        false,
         id,
         status,
         currency,
@@ -746,7 +773,7 @@ export class EventsServices {
 
   //card/transfer one-time charity payment response
   async payStackCharityPaymentResponse(reference: string, res: Response) {
-    //for both card and bank payments. All that most required is the uniquely generated transaction reference
+    //for both card and bank payments. All that is required is the uniquely generated transaction reference
     try {
       const url = `https://api.paystack.co/transaction/verify/${reference}`;
       const options = {
@@ -828,17 +855,20 @@ export class EventsServices {
 
           // const realamount = amount - Number(chargeAmount);
           if (userId) {
-            await this.Wallet.createWalletTransactions(
-              userId,
-              status,
-              currency,
-              Number(amount) / 100,
-              'Bank Withdraw: Charity Funding',
-              `Charity funding with ${currency} ${amount / 100}`,
-            );
+            // await this.Wallet.createWalletTransactions(
+            //   userId,
+            //   false,
+            //   status,
+            //   currency,
+            //   Number(amount) / 100,
+            //   'Bank Withdraw: Charity Funding',
+            //   `Charity funding with ${currency} ${amount / 100}`,
+            //   'paystack',
+            // );
 
             await this.Wallet.createTransaction(
               userId,
+              false,
               id,
               status,
               currency,
@@ -851,6 +881,13 @@ export class EventsServices {
               ref,
               'Bank Withdraw: Charity Funding',
               `Charity funding with ${currency} ${amount / 100}`,
+              'paystack',
+              null,
+              null,
+              {
+                recipientId: eventId,
+                recipientName: `charity&${event?.eventName}`,
+              },
             );
           }
 
@@ -929,7 +966,7 @@ export class EventsServices {
 
     frequencyfactor = Number(frequencyfactor.toFixed(0));
 
-    console.log('frequencyfactor', frequencyfactor);
+    // console.log('frequencyfactor', frequencyfactor);
 
     try {
       if (!amount) {
@@ -1005,9 +1042,13 @@ export class EventsServices {
               },
               { new: true },
             );
+
             // const realamount = amount - Number(chargeAmount);
+
+            //create transaction for sender
             await this.Wallet.createTransaction(
               userId ? userId : idForVisitor,
+              false,
               id,
               status,
               currency,
@@ -1018,8 +1059,36 @@ export class EventsServices {
                 phone_number: metadata?.customer?.phone_number,
               },
               cardPaymentRef,
-              'Wallet Top-up',
-              'Paystack Top-up Received',
+              'Charity recurrent payment',
+              'Bank withdrawal proccessed',
+              'paystack',
+              null,
+              null,
+              {
+                recipientId: eventId,
+                recipientName: `charity&${event?.eventName}`,
+              },
+            );
+
+            // create credit transaction for recipient
+            await this.Wallet.createTransaction(
+              event?.creatorId,
+              true,
+              id,
+              status,
+              currency,
+              Number(amount) / 100,
+              {
+                name: actualName,
+                email: email,
+                phone_number: metadata?.customer?.phone_number,
+              },
+              cardPaymentRef,
+              'Charity recurrent payment',
+              'Bank withdrawal proccessed',
+              'paystack',
+              null,
+              { senderId: userId, senderName: `${actualName}` },
             );
 
             //reduce frequencyfactor by 1, then pass info to recurrenpayment
@@ -1590,6 +1659,8 @@ export class EventsServices {
     }
   }
 
+  //pay an into an escrow account
+  //it is this amount an ecrow appointee will disburse leter to concerned escrow members
   async payEscrow({
     eventId,
     userId,
@@ -1637,7 +1708,8 @@ export class EventsServices {
             'has_paid property could not be updated. customer support for assistance',
         });
       }
-      //increae the escrow's amount
+
+      //increase the escrow's amount
       const escrowAmountIncreases = await this.event.findOneAndUpdate(
         {
           _id: eventId,
@@ -1656,6 +1728,7 @@ export class EventsServices {
 
       await this.Wallet.createWalletTransactions(
         userId,
+        false,
         'successful',
         currency,
         amount,
@@ -1664,6 +1737,7 @@ export class EventsServices {
       );
       await this.Wallet.createTransaction(
         userId,
+        false,
         `${(Math.random() * 10000).toFixed(0)}${Date.now()}`,
         'successful',
         currency,
@@ -1676,6 +1750,13 @@ export class EventsServices {
         `charityapp${Date?.now()}${Math?.random()}`,
         'In-app Transfer: Escrow payment',
         'In-app Transaction: Escrow payment',
+        'paystack',
+        null,
+        null,
+        {
+          recipientId: `${eventId}&${escrowId}`,
+          recipientName: `event&escrow&${escrowAmountIncreases?.eventName}`,
+        },
       );
       // const escrow = escrowAmountIncreases?.escrow?.find((eachEscrow: any) => {
       //   return eachEscrow?.appointer?.userId?.toString() === userId;
@@ -1718,6 +1799,7 @@ export class EventsServices {
       //check if appointeeId belongs to actual appointee. Only this user can disburse funds
       const isAppointee = await this.event.findOne({
         _id: eventId,
+        //i think escrowId should be validated here too, alongside escrow.appointee.userId
         'escrow.appointee.userId': appointeeId,
         // 'escrow.appointee.userId': { $elemMatch: { userId: appointeeId } },
       });
@@ -1831,14 +1913,17 @@ export class EventsServices {
             await this.Wallet.increaseWallet(userId, amount, currency, null);
             await this.Wallet.createWalletTransactions(
               userId,
+              true,
               'successful',
               currency,
               amount,
               'Wallet Top-up: Escrow payment',
               'In-app Transaction: Escrow payment',
             );
+
             await this.Wallet.createTransaction(
               userId,
+              true,
               `${(Math.random() * 10000).toFixed(0)}${Date.now()}`,
               'successful',
               currency,
@@ -1851,6 +1936,12 @@ export class EventsServices {
               `charityapp${Date?.now()}${Math?.random()}`,
               'Wallet Top-up: Escrow payment',
               'In-app Transaction: Escrow payment',
+              'escrow',
+              null,
+              {
+                senderId: `${eventId}&${escrowId}`,
+                senderName: `event&escrow&${event?.eventName}`,
+              },
             );
 
             //push successful user payment record into payment form
@@ -1971,6 +2062,7 @@ export class EventsServices {
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     return timezone;
   }
+
   async getUserCountryCurrency(req: any, res: Response) {
     let ip = req.headers['x-forwarded-for'];
     console.log(req.headers);
@@ -2010,6 +2102,7 @@ export class EventsServices {
     // console.log(req.socket.localAddress);
     // console.log(req.socket.remoteAddress);
   }
+
   async fetchAllEvents(eventName: string, res: Response) {
     try {
       const eventDetails = await this.eventDetails
@@ -2093,6 +2186,7 @@ export class EventsServices {
       throw new InternalServerErrorException(err.message);
     }
   }
+
   async fetchEventCreatorDetails(creatorId: string) {
     try {
       const creator = await this.user.findOne({
@@ -2111,412 +2205,7 @@ export class EventsServices {
       throw new InternalServerErrorException({ msg: err?.message });
     }
   }
-  async joinEvent(
-    eventId: string,
-    userId: string,
-    name: string,
-    creatorId: string,
-  ) {
-    //creatorId is needed to check if event creator has reached limit for
-    //number of people that can join their event.
-    if (!eventId || !userId || !creatorId) {
-      throw new ForbiddenException({
-        msg: 'incomplete data sent. Check documentation for necessary request data',
-      });
-    }
 
-    try {
-      const creator = await this.user.findOne({ _id: creatorId });
-      const event = await this.event.findOne({ _id: eventId });
-      // console.log(event.members.length, creator.event_max_allowed_participants);
-      if (event.members.length >= creator.event_max_allowed_participants) {
-        throw new ForbiddenException(
-          'You cannot join this event. Maximum amount of participants is reached',
-        );
-      }
-      if (new Date().getTime() > new Date(event.depositDeadline).getTime()) {
-        throw new ForbiddenException(
-          'You cannot join this event as deposit date has expired',
-        );
-      }
-      const memberExists = await this.event.findOne({
-        _id: eventId,
-        members: { $elemMatch: { userId } },
-      });
-      if (memberExists) {
-        throw new ForbiddenException({
-          msg: "You are already part of this event. Refresh page to see 'Open Event' button",
-        });
-      }
-      const update = await this.event.findOneAndUpdate(
-        { _id: eventId },
-        { $push: { members: { userId, name } } },
-        { new: true },
-      );
-      const updateEventDetails = await this.eventDetails.findOneAndUpdate(
-        { eventId },
-        { $push: { members: { userId, name } } },
-        { new: true },
-      );
-      if (!update || !updateEventDetails) {
-        throw new BadRequestException({ msg: 'Something went wrong' });
-      }
-      return { msg: 'success' };
-    } catch (err) {
-      throw new InternalServerErrorException({ msg: err.message });
-    }
-  }
-  async joinEventAsObserver(eventId: string, userId: string, name: string) {
-    if (!eventId || !userId) {
-      throw new BadRequestException({
-        msg: 'event Id and user Id must be present',
-      });
-    }
-    try {
-      const memberExists = await this.event.findOne({
-        _id: eventId,
-        observers: { $elemMatch: { userId } },
-      });
-      if (memberExists) {
-        throw new BadRequestException({
-          msg: "You are already part of this event. Refresh page to see 'Open Event' button",
-        });
-      }
-      const update = await this.event.findOneAndUpdate(
-        { _id: eventId },
-        { $push: { observers: { userId, name } } },
-        { new: true },
-      );
-      const updateEventDetails = await this.eventDetails.findOneAndUpdate(
-        { eventId },
-        { $push: { observers: { userId, name } } },
-        { new: true },
-      );
-      if (!update || !updateEventDetails) {
-        throw new NotFoundException({ msg: 'Something went wrong' });
-      }
-      return { msg: 'success' };
-    } catch (err) {
-      throw new InternalServerErrorException({ msg: err.message });
-    }
-  }
-  async leaveEvent(eventId: string, userId: string) {
-    if (!eventId || !userId) {
-      throw new BadRequestException({
-        msg: 'event Id and user Id must be present',
-      });
-    }
-    try {
-      const memberExists = await this.event.findOne({
-        _id: eventId,
-        members: { $elemMatch: { userId } },
-      });
-      const observerExists = await this.event.findOne({
-        _id: eventId,
-        observers: { $elemMatch: { userId } },
-      });
-      if (!memberExists && !observerExists) {
-        throw new ForbiddenException({
-          msg: 'You are no longer part of this event. If you wish to be re-added, go to event cover page to join this event',
-        });
-      }
-      const update = await this.event.findOneAndUpdate(
-        { _id: eventId },
-        { $pull: { members: { userId } } },
-        { new: true },
-      );
-      const updateEventDetails = await this.eventDetails.findOneAndUpdate(
-        { eventId },
-        { $pull: { members: { userId } } },
-        { new: true },
-      );
-      if (!update || !updateEventDetails) {
-        throw new BadRequestException({ msg: 'Something went wrong' });
-      }
-      return { msg: 'success. You left this event.' };
-    } catch (err) {
-      throw new InternalServerErrorException({ msg: err.message });
-    }
-  }
-  async fetchEventDetails(eventId: string) {
-    if (!eventId) {
-      throw new BadRequestException({
-        msg: 'Event Id must be present. Please contact customer support',
-      });
-    }
-    const detail = await this.eventDetails.findOne({ eventId });
-    const event = await this.event.findOne({ _id: eventId });
-
-    if (!detail || !event) {
-      throw new NotFoundException({
-        msg: 'Event detail or event does not seem to exist. Contact customer support',
-      });
-    }
-    const completeDetail = {
-      _id: detail._id,
-      eventId: detail.eventId,
-      eventName: detail.eventName,
-      memberCategories: detail.memberCategories,
-      totalEventAmount: detail.totalEventAmount,
-      memberRequests: detail.memberRequests,
-      totalMemberRequestsAmount: detail.totalMemberRequestsAmount,
-      disputeForms: detail.disputeForms,
-      pledgeForms: detail.pledgeForms,
-      requestTimeLimit: detail.requestTimeLimit,
-      disputeTimeLimit: detail.disputeTimeLimit,
-      eventPrivacy: event.eventPrivacy,
-      completionDeadline: event.completionDeadline,
-      depositDeadline: event.depositDeadline,
-      eventParticipantNumber: event.members.length,
-    };
-    return { msg: 'success', eventDetail: completeDetail };
-  }
-  async addMemberRequest(
-    userId: String,
-    name: string,
-    description: string,
-    amount: string | number,
-    eventId: string,
-  ) {
-    try {
-      const user = this.user.findOne({ _id: userId });
-      if (!user) {
-        throw new NotFoundException({ msg: 'Unauthorized access' });
-      }
-
-      const requestList = await this.getmembersRequestList(eventId);
-      const eventDet = await this.eventDetails.findOne({ eventId });
-      const event = await this.event.findOne({ _id: eventId });
-
-      //check if completion deadline has passed. Decline request if it hasn't.
-      if (new Date(event.completionDeadline).getTime() > new Date().getTime()) {
-        throw new ForbiddenException(
-          'Requests can only be made after completion deadline has passed',
-        );
-      }
-
-      //check if member is requesting more than event's total deposit amount
-      if (
-        Number(requestList.totalMemberRequestsAmount) + Number(amount) >
-        Number(eventDet.totalEventAmount)
-      ) {
-        throw new ForbiddenException(
-          `Requested amount cannot be greater than total money (${eventDet.totalEventAmount} NGN) available in this event`,
-        );
-      }
-
-      // const eventDet = await this.eventDetails.findOne({ eventId });
-      const userExists = await this.eventDetails.findOne({
-        eventId,
-        memberRequests: { $elemMatch: { userId } },
-      });
-      if (userExists) {
-        throw new BadRequestException({
-          msg: 'Your request is already queued. Either edit it or delete it and create a new one',
-        });
-      }
-      const info = {
-        userId,
-        name,
-        description,
-        amount,
-        date: Date.now(),
-      };
-      eventDet.memberRequests.push(info);
-      eventDet.totalMemberRequestsAmount += Number(amount);
-      await eventDet.save();
-      return {
-        msg: 'success',
-        memberRequests: eventDet.memberRequests,
-        totalMemberRequestsAmount: eventDet.totalMemberRequestsAmount,
-      };
-    } catch (err) {
-      throw new InternalServerErrorException({ msg: err.message });
-    }
-  }
-  async getmembersRequestList(eventId: string) {
-    try {
-      const eventDet = await this.eventDetails.findOne({ eventId });
-      if (!eventDet) {
-        throw new BadRequestException({ msg: 'Something went wrong' });
-      }
-
-      const event = await this.event.findOne({ _id: eventId });
-      return {
-        msg: 'success',
-        memberRequests: eventDet.memberRequests,
-        totalMemberRequestsAmount: eventDet.totalMemberRequestsAmount,
-        eventParticipantNumber: event.members.length,
-      };
-    } catch (err) {
-      throw new InternalServerErrorException({ msg: err.message });
-    }
-  }
-  async editMemberRequest(
-    userId: string,
-    eventId: string,
-    amount: string | number,
-    requestOwnerId: string,
-    name: string,
-    description: string,
-  ) {
-    try {
-      const observerExists = await this.event.findOne(
-        { _id: eventId },
-        { observers: { $elemMatch: { userId } } },
-      );
-
-      if (userId !== requestOwnerId && !observerExists) {
-        throw new ForbiddenException({ msg: 'Forbidden request' });
-      }
-
-      const requestList = await this.getmembersRequestList(eventId);
-      const eventDetail = await this.eventDetails.findOne({ eventId });
-      if (!eventDetail) {
-        throw new BadRequestException({
-          msg: 'Something went wrong. Please try again',
-        });
-      }
-      const event = await this.event.findOne({ _id: eventId });
-      let highestJudgesNominated = [];
-      let nominations = 0;
-      event?.observers?.map((eachObs: any) => {
-        if (Number(eachObs?.nominations) >= nominations) {
-          nominations = Number(eachObs?.nominations);
-          if (nominations !== 0) {
-            highestJudgesNominated.push(eachObs.userId.toString());
-          }
-        }
-      });
-
-      //get foremer amount the member requested
-      const userFormerReqAmount = requestList.memberRequests.find(
-        (requests: any) => {
-          return requests.userId.toString() === requestOwnerId;
-        },
-      )?.amount;
-      if (!userFormerReqAmount && !highestJudgesNominated.includes(userId)) {
-        throw new ForbiddenException(
-          `You do not have any logged requests to edit`,
-        );
-      }
-
-      //Using former requested amount, check if member is requesting more than even's total deposit amount
-      if (
-        Number(requestList.totalMemberRequestsAmount) -
-          Number(userFormerReqAmount) +
-          Number(amount) >
-        Number(eventDetail.totalEventAmount)
-      ) {
-        throw new ForbiddenException(
-          `Requested amount cannot be greater than total money (${eventDetail.totalEventAmount} NGN) available in this event`,
-        );
-      }
-      // console.log(requestList.totalMemberRequestsAmount);
-      //find a single user request object to pull out the user's amount contributed
-      const userExists = await this.eventDetails.findOne(
-        { eventId: eventId },
-        { memberRequests: { $elemMatch: { userId: requestOwnerId } } },
-      );
-
-      //update total amount on main event object
-      eventDetail.totalMemberRequestsAmount -=
-        userExists.memberRequests[0].amount;
-      await eventDetail.save();
-
-      const info = {
-        userId: requestOwnerId,
-        amount,
-        name,
-        description,
-        date: userExists.memberRequests[0].date,
-      };
-      const eventDet = await this.eventDetails.findOneAndUpdate(
-        { eventId, 'memberRequests.userId': requestOwnerId },
-        { $set: { 'memberRequests.$': info } },
-        { new: true },
-      );
-
-      if (!eventDet) {
-        throw new BadRequestException({
-          msg: 'Something went wrong. Please try again',
-        });
-      }
-      eventDetail.totalMemberRequestsAmount += Number(amount);
-      await eventDetail.save();
-      return {
-        msg: 'success',
-        memberRequests: eventDetail.memberRequests,
-        totalMemberRequestsAmount: eventDetail.totalMemberRequestsAmount,
-      };
-    } catch (err) {
-      throw new InternalServerErrorException({ msg: err.message });
-    }
-  }
-  async deleteMemberRequest(
-    userId: string,
-    eventId: string,
-    requestOwnerId: string,
-  ) {
-    if (userId !== requestOwnerId) {
-      throw new ForbiddenException({ msg: 'Forbidden request' });
-    }
-
-    try {
-      const eventDetail = await this.eventDetails.findOne({ eventId });
-      if (!eventDetail) {
-        throw new BadRequestException({
-          msg: 'Something went wrong. Please try again herre',
-        });
-      }
-
-      //find a single user request object to pull out the user's amount contributed
-      const userExists = await this.eventDetails.findOne(
-        { eventId: eventId },
-        { memberRequests: { $elemMatch: { userId: requestOwnerId } } },
-      );
-
-      //update total amount on main event object
-      eventDetail.totalMemberRequestsAmount -=
-        userExists.memberRequests[0].amount;
-      await eventDetail.save();
-
-      const eventDet = await this.eventDetails.findOneAndUpdate(
-        { eventId },
-        { $pull: { memberRequests: { userId: requestOwnerId } } },
-        { new: true },
-      );
-      if (!eventDet) {
-        throw new BadRequestException({
-          msg: 'Something went wrong. Please try again2',
-        });
-      }
-      return {
-        msg: 'success',
-        memberRequests: eventDetail.memberRequests,
-        totalMemberRequestsAmount: eventDetail.totalMemberRequestsAmount,
-      };
-    } catch (err) {
-      throw new InternalServerErrorException({ msg: err.message });
-    }
-  }
-  async getMembersAndObservers(eventId: string) {
-    try {
-      const event = await this.event.findOne({ _id: eventId });
-      if (!event) {
-        throw new BadRequestException({
-          msg: 'Something went wrong. Could not get event',
-        });
-      }
-      return {
-        msg: 'successful',
-        members: event.members,
-        observers: event.observers,
-      };
-    } catch (err) {
-      throw new InternalServerErrorException({ msg: err.message });
-    }
-  }
   async logDisputeForm(
     disputeLogger: string,
     description: string,
@@ -2748,137 +2437,6 @@ export class EventsServices {
         depositDeadline: eventproper.depositAmount,
         completionDeadline: eventproper.completionDeadline,
       };
-    } catch (err) {
-      throw new InternalServerErrorException({ msg: err.message });
-    }
-  }
-  async makePledge(
-    userId: string,
-    eventId: string,
-    pledgeDateDeadline: string | Date,
-    amount: number,
-    description: string,
-    name: string,
-  ) {
-    try {
-      if (
-        !userId ||
-        !eventId ||
-        !pledgeDateDeadline ||
-        !amount ||
-        !description ||
-        !name
-      ) {
-        throw new ForbiddenException(
-          'Incomplete credentials. Please provide all necessary information',
-        );
-      }
-      const result = await this.authservice.confirmFeatureEligibility(
-        'can_use_pledge_forms',
-        userId,
-      );
-      if (result === false) {
-        throw new ForbiddenException(
-          'This feature is not part of your subscription plan. Please upgrade your plan or purchase a bundle with the item',
-        );
-      }
-      const pledgeExists = await this.eventDetails.findOne({
-        eventId,
-        pledgeForms: { $elemMatch: { userId } },
-      });
-
-      if (pledgeExists) {
-        throw new ForbiddenException(
-          'You already made a pledge. Edit or delete existing pledge.',
-        );
-      }
-      const eventDetails = await this.eventDetails.findOne({ eventId });
-      eventDetails.pledgeForms.push({
-        userId,
-        pledgeDateDeadline,
-        amount,
-        description,
-        name,
-      });
-      await eventDetails.save();
-      return { msg: 'success', pledgeForms: eventDetails.pledgeForms };
-    } catch (err) {
-      throw new InternalServerErrorException({ msg: err.message });
-    }
-  }
-  async editPledge(
-    userId: string,
-    eventId: string,
-    pledgeDateDeadline: string | Date,
-    amount: number,
-    description: string,
-    name: string,
-  ) {
-    try {
-      if (
-        !userId ||
-        !eventId ||
-        !pledgeDateDeadline ||
-        !amount ||
-        !description ||
-        !name
-      ) {
-        throw new ForbiddenException(
-          'Incomplete credentials. Please provide all necessary information',
-        );
-      }
-      const pledgeExists = await this.eventDetails.findOne({
-        eventId,
-        pledgeForms: { $elemMatch: { userId } },
-      });
-      if (!pledgeExists) {
-        throw new ForbiddenException(
-          'This pledge no longer exist or was never created',
-        );
-      }
-      const eventDetails = await this.eventDetails.findOneAndUpdate(
-        { eventId, 'pledgeForms.userId': userId },
-        {
-          $set: {
-            'pledgeForms.$': {
-              userId,
-              pledgeDateDeadline,
-              amount,
-              description,
-              name,
-            },
-          },
-        },
-        { new: true },
-      );
-      return { msg: 'success', pledgeForms: eventDetails.pledgeForms };
-    } catch (err) {
-      throw new InternalServerErrorException({ msg: err.message });
-    }
-  }
-  async deletePledge(userId: string, eventId: string) {
-    if (!userId || !eventId) {
-      throw new ForbiddenException(
-        'Incomplete credentials. Please provide all necessary information',
-      );
-    }
-    try {
-      const pledgeExists = await this.eventDetails.findOne({
-        eventId,
-        pledgeForms: { $elemMatch: { userId } },
-      });
-      if (!pledgeExists) {
-        throw new ForbiddenException(
-          'This pledge no longer exist or was never created',
-        );
-      }
-      const eventDetails = await this.eventDetails.findOneAndUpdate(
-        { eventId },
-        { $pull: { pledgeForms: { userId } } },
-        // { $pull: { 'pledgeForms.$': { userId } } },
-        { new: true },
-      );
-      return { msg: 'success', pledgeForms: eventDetails.pledgeForms };
     } catch (err) {
       throw new InternalServerErrorException({ msg: err.message });
     }
