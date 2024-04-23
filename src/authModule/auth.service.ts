@@ -85,7 +85,6 @@ export class AuthService {
     if (!email || !password) {
       return res.status(400).json({ msg: 'Incomplete credentials' });
     }
-    console.log(email, password);
     try {
       const user = await this.User.findOne({ email });
       if (!user) {
@@ -95,7 +94,7 @@ export class AuthService {
       }
       const isPassCorrect = await bcrypt.compare(password, user.password);
       if (isPassCorrect) {
-        if (user.isVerified) {
+        if (user?.isVerified) {
           const {
             _id,
             email,
@@ -117,17 +116,17 @@ export class AuthService {
             },
           );
 
-          await attachCookiesToResponse(res, {
-            _id,
-            firstName,
-            lastName,
-            phoneNumber,
-            isAdmin,
-          });
+          // await attachCookiesToResponse(res, {
+          //   _id,
+          //   firstName,
+          //   lastName,
+          //   phoneNumber,
+          //   isAdmin,
+          // });
 
           return res.status(201).json({
             msg: 'success',
-            payload: {
+            user: {
               _id,
               email,
               token,
@@ -299,7 +298,6 @@ export class AuthService {
 
   async completeRegistration(userId: string, res: Response) {
     try {
-      console.log(userId);
       const user = await this.User.findOne({ _id: userId });
       if (!user) {
         return res.status(401).json({
@@ -351,7 +349,7 @@ export class AuthService {
           (response) => {
             return res.status(200).json({
               msg: 'success! we sent you an email to verify your account',
-              payload: {
+              user: {
                 _id,
                 email,
                 token,
@@ -528,7 +526,9 @@ export class AuthService {
           'Forbidden request. This user does not exist',
         );
       }
-      let decodedUser = await jwtIsValid(req.signedCookies.accessToken);
+
+      const token = req?.headers.authorization?.split(' ')[1];
+      let decodedUser = await jwtIsValid(token);
       // console.log(decodedUser)
       const {
         email,
@@ -1181,7 +1181,10 @@ export class AuthService {
   ) {
     // console.log(userId, accountBank, accountNumber, accountName)
     try {
-      let decodedUser = await jwtIsValid(req.signedCookies.accessToken);
+      const token = req?.headers.authorization?.split(' ')[1];
+
+      // let decodedU;
+      let decodedUser = await jwtIsValid(token);
       // console.log(decodedUser)
       if (decodedUser._id.toString() !== userId && !decodedUser.isAdmin) {
         return res.status(400).json({
@@ -1630,7 +1633,7 @@ export class AuthService {
 
   async tokenIsStillValid(req: Request, res: Response) {
     try {
-      const token = req?.signedCookies?.accessToken;
+      const token = req?.headers.authorization?.split(' ')[1];
       const result = await jwtIsValid(token);
       if (result) {
         return res.status(200).json({ msg: true });

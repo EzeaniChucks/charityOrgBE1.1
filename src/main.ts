@@ -17,7 +17,8 @@ async function bootstrap() {
       'https://api.paystack.co',
     ],
     // origin: ['https://charityorg.vercel.app:443'],
-    allowedHeaders: 'Origin, X-Requested-With, Content-Type, Accept',
+    allowedHeaders:
+      'Origin, X-Requested-With, Content-Type, Accept, Authorization',
     methods: 'GET, HEAD, PUT, PATCH, POST, DELETE, OPTIONS',
     credentials: true,
   });

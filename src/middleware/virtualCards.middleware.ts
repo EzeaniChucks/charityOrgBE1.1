@@ -11,10 +11,13 @@ import { jwtIsValid } from 'src/util';
 export class VirtualCardsChecker implements NestMiddleware {
   async use(req: Request, res: Response, next: NextFunction) {
     try {
-      if (!req.signedCookies.accessToken) {
-        return res.status(400).json({msg:'Forbidden request'});
+      const token = req?.headers.authorization?.split(' ')[1];
+      if (!token) {
+        throw new ForbiddenException('Forbidden request');
       }
-      const isTokenValid = await jwtIsValid(req.signedCookies.accessToken);
+      // const isTokenValid = await jwtIsValid(req?.signedCookies?.accessToken);
+      const isTokenValid = await jwtIsValid(token);
+      // const isTokenValid = await jwtIsValid(req.signedCookies.accessToken);
       if (isTokenValid) {
         next();
       } else {
@@ -23,7 +26,7 @@ export class VirtualCardsChecker implements NestMiddleware {
         });
       }
     } catch (err) {
-      return res.status(500).json({ msg: err.message });
+      throw new InternalServerErrorException({ msg: err.message });
     }
   }
 }
