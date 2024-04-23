@@ -66,6 +66,10 @@ export class AppModule implements NestModule {
           method: RequestMethod.POST,
         },
         {
+          path: 'paystack_bvn_identity_validation',
+          method: RequestMethod.POST,
+        },
+        {
           path: 'paystack_get_banks',
           method: RequestMethod.GET,
         },

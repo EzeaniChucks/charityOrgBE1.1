@@ -1403,7 +1403,7 @@ export class PaymentService {
       if (!user) {
         return res
           .status(400)
-          .json({ msg: 'unauthorized access', payload: 'User dos not exist' });
+          .json({ msg: 'unauthorized access', payload: 'You do not have access to this route' });
       }
 
       if (!user?.paystack_customer_code) {
