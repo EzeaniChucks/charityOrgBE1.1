@@ -1754,7 +1754,7 @@ export class EventsServices {
         null,
         null,
         {
-          recipientId: `${eventId}&${escrowId}`,
+          recipientId: `${eventId}`,
           recipientName: `event&escrow&${escrowAmountIncreases?.eventName}`,
         },
       );
@@ -1939,7 +1939,7 @@ export class EventsServices {
               'escrow',
               null,
               {
-                senderId: `${eventId}&${escrowId}`,
+                senderId: `${escrowId}`,
                 senderName: `event&escrow&${event?.eventName}`,
               },
             );
