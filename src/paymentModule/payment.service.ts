@@ -1462,13 +1462,13 @@ export class PaymentService {
   }
 
   async paystackBVNValidationWebhookResponse(body: any, res: Response) {
-    console.log('paystack webook response',body);
+    // console.log('paystack webook response',body);
     try {
       const { event, data } = body;
-      const { email, identification } = data;
-      const user = await this.User.findOne({ email });
 
       if (event === 'customeridentification.success') {
+        const { email, identification } = data;
+        const user = await this.User.findOne({ email });
         const updateduser = await this.User.findOneAndUpdate(
           { email },
           {
@@ -1493,7 +1493,8 @@ export class PaymentService {
         return res.sendStatus(200);
       }
 
-      if (event === 'customeridentification.failure') {
+      if (event === 'customeridentification.failed') {
+        const { email } = data;
         const updateduser = await this.User.findOneAndUpdate(
           { email },
           {
