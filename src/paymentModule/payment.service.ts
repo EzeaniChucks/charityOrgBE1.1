@@ -1462,7 +1462,7 @@ export class PaymentService {
   }
 
   async paystackBVNValidationWebhookResponse(body: any, res: Response) {
-    // console.log(body);
+    console.log('paystack webook response',body);
     try {
       const { event, data } = body;
       const { email, identification } = data;
