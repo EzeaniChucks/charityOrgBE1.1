@@ -34,6 +34,7 @@ export class PaymentService {
     @InjectModel('recurrentPayment') private recurrentPayment: Model<any>,
     @InjectModel('event') public event: Model<any>,
     @InjectModel('eventDetails') private eventDetails: Model<any>,
+    @InjectModel('withdrawalIntent') private withdrawalIntent: Model<any>,
     @Inject(forwardRef(() => AuthService))
     private authservice: AuthService, // private Wallet: PaymentService,
     private readonly notificationservice: NotifService,
@@ -671,12 +672,10 @@ export class PaymentService {
   //FL bank payment
   async flSendMoneyToBank(
     userId: string,
-    amount: number | string,
-    currency: string,
-    account_bank: string,
-    account_number: number | string,
+    withdrawalIntentId: string,
     response: Response,
   ) {
+    
     try {
       const user = await this.User.findOne({ _id: userId });
       if (!user) {
@@ -684,6 +683,26 @@ export class PaymentService {
           .status(400)
           .json('forbidden request. This user doen not exist');
       }
+
+      const withdrawalIntent = await this.withdrawalIntent.findOne({
+        _id: withdrawalIntentId,
+      });
+      if (withdrawalIntent?.intentStatus === 'cancelled') {
+        return response
+          .status(400)
+          .json(
+            'This payment intent has been cancelled by user and should no longer be processed',
+          );
+      }
+      
+      if (withdrawalIntent?.intentStatus !== 'unattended') {
+        return response.status(400).json(`This payment intent already has a status of ${withdrawalIntent?.intentStatus}.`);
+      }
+
+      const currency = withdrawalIntent?.currency;
+      const amount = withdrawalIntent?.amount;
+      const account_bank = withdrawalIntent?.accountBank;
+      const account_number = withdrawalIntent?.accountNumber;
 
       //amount below 100 cannot be sent
       // console.log(userId, amount, currency, account_bank, account_number);
@@ -699,12 +718,15 @@ export class PaymentService {
         'Wallet Withdraw',
         'Bank Transfer',
       );
+      
       // const { account_bank, account_number } = user.bankDetails;
       const callback_url = `https://${process.env.BACK_END_CONNECTION}/respond_to_fl_bank_payment`;
+      
       const reference = `${user.firstName}_${user.lastName}_${Date.now()}`;
+      
       const data = {
         account_bank,
-        account_number: account_number,
+        account_number,
         amount: Number(amount),
         narration: `Transfer from ${user?.firstName} ${user?.lastName} @CharityApp`,
         currency,
@@ -736,17 +758,19 @@ export class PaymentService {
           transfer_purpose: 'Wallet withdrawal',
         },
       };
+      
       const flw = new Flutterwave(
         // 'FLWPUBK_TEST-31f261f02a971b32bd56cf4deff5e74a-X',
         `${process.env.FLUTTERWAVE_V3_PUBLIC_KEY}`,
         `${process.env.FLUTTERWAVE_V3_SECRET_KEY}`,
       );
+
       const result = await flw.Transfer.initiate(data);
       // console.log(result);
       if (result.status === 'error') {
         return response
           .status(400)
-          .json({ msg: 'failed', payload: result.message });
+          .json({ msg: 'failed', payload: result?.message });
       }
       //  const fl_queued_result =     {
       //   status: 'success',
@@ -802,12 +826,12 @@ export class PaymentService {
           name: `${user?.firstName} ${user?.lastName}`,
         },
         `charityapp${Date.now()}${Math.random()}`,
-        'Wallet Withdraw',
+        'Wallet Withdraw: Bank transfer',
         'Bank Transaction: Flutterwave bank transfer',
       );
       return response
         .status(200)
-        .json({ msg: 'success', payload: result.data });
+        .json({ msg: 'success', payload: result?.data });
     } catch (err) {
       throw new InternalServerErrorException({ msg: err.message });
     }
@@ -1403,7 +1427,10 @@ export class PaymentService {
       if (!user) {
         return res
           .status(400)
-          .json({ msg: 'unauthorized access', payload: 'You do not have access to this route' });
+          .json({
+            msg: 'unauthorized access',
+            payload: 'You do not have access to this route',
+          });
       }
 
       if (!user?.paystack_customer_code) {

@@ -6,6 +6,7 @@ import {
 import * as request from 'request';
 import * as jwt from 'jsonwebtoken';
 import { Response } from 'express';
+import * as emailjs from '@emailjs/nodejs';
 // export const currency_array = [
 //   { 'British Pound Sterling': 'GBP' },
 //   { 'Canadian Dollar': 'CAD' },
@@ -150,4 +151,23 @@ export const convertcurrency = async (
   // if (rate) {
   //   return rate;
   // }
+};
+
+export const sendEmail = async (
+  user: { firstName: string; lastName: string; email: string },
+  message: string,
+) => {
+  return await emailjs.send(
+    process.env.EmailServiceId,
+    process.env.EmailTemplateId,
+    {
+      name: `${user?.firstName} ${user?.lastName}`,
+      email: `${user?.email}`,
+      message,
+    },
+    {
+      publicKey: '7UpYhI4ulL04ybL_j',
+      privateKey: 't-HI5fwlLdMx_qOM7QfRx',
+    },
+  );
 };

@@ -23,6 +23,7 @@ export const eventSchema = new mongoose.Schema({
     required: [true, 'Event privacy must be provided'],
     default: 'Public',
   },
+  eventTags: { type: [String] },
   // timeZone: { type: String, required: [true, 'Time zone must be provided'] },
   hostStatus: {
     type: String,
@@ -73,6 +74,8 @@ export const eventSchema = new mongoose.Schema({
     {
       appointee: {
         userId: mongoose.Schema.Types.ObjectId,
+        userName: { type: String, default: '' },
+        userEmail: { type: String, default: '' },
         accepted: { type: Boolean, default: false },
         has_disbursed_payment: { type: Boolean, default: false },
       },
@@ -81,12 +84,18 @@ export const eventSchema = new mongoose.Schema({
         accepted: { type: Boolean, default: false },
         money_value_willing_to_raise: { type: Number, default: 0 },
         money_currency_willing_to_raise: { type: String },
+        money_left_after_disbursement: { type: Number, default: 0 },
         has_paid: { type: Boolean, default: false },
       },
       escrowDetails: {
         amount: { type: Number, default: 0 },
         currency: String,
         paidOut: { type: Boolean, default: false },
+        paymentCompletionStatus: {
+          type: String,
+          enum: ['nill', 'partial', 'complete'],
+          default: 'nill',
+        },
       },
       //deposit
       //then invite decider

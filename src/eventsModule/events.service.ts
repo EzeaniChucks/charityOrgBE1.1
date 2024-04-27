@@ -22,6 +22,7 @@ import * as request from 'request';
 import { fork } from 'child_process';
 import { promisify } from 'util';
 import { NotifService } from 'src/notificationModule/notifService';
+import { sendEmail } from 'src/util';
 
 // const asyncFork = promisify(fork);
 @Injectable()
@@ -217,7 +218,7 @@ export class EventsServices {
       //Next, reward concerned charity with value (following wallet deduction)
       //adjust the recurrentPayment plan to show that user has just paid. E.g, extend next charge date if relevant
       //create transaction history
-      console.log('start');
+      // console.log('start');
       for (let eachrecurrence of charity_wallet_recurrence) {
         try {
           const {
@@ -244,7 +245,7 @@ export class EventsServices {
             name: userName,
           };
 
-          await this.event.findOneAndUpdate(
+          const event = await this.event.findOneAndUpdate(
             { _id: eventId },
             {
               $push: {
@@ -289,6 +290,13 @@ export class EventsServices {
             tx_ref,
             description,
             narration,
+            'paystack',
+            null,
+            null,
+            {
+              recipientId: `${eventId}`,
+              recipientName: `charity&${event?.eventName}`,
+            },
           );
           eachrecurrence.frequencyfactor--;
           eachrecurrence.renewalDateMicroSec += Number(
@@ -626,7 +634,7 @@ export class EventsServices {
       frequencyDateMilliseconds;
 
     frequencyfactor = Number(frequencyfactor.toFixed(0));
-    console.log(frequencyfactor);
+    // console.log(frequencyfactor);
     try {
       //first execute the transfer from user wallet to event deposit
       //check if user has a wallet. if not, autocreate one.
@@ -711,6 +719,13 @@ export class EventsServices {
         tx_ref,
         description,
         narration,
+        'inapp_event',
+        null,
+        null,
+        {
+          recipientId: `${eventId}`,
+          recipientName: `charity&${event?.eventName}`,
+        },
       );
 
       //get creator wallet for creating event increase record
@@ -855,17 +870,7 @@ export class EventsServices {
 
           // const realamount = amount - Number(chargeAmount);
           if (userId) {
-            // await this.Wallet.createWalletTransactions(
-            //   userId,
-            //   false,
-            //   status,
-            //   currency,
-            //   Number(amount) / 100,
-            //   'Bank Withdraw: Charity Funding',
-            //   `Charity funding with ${currency} ${amount / 100}`,
-            //   'paystack',
-            // );
-
+            //create transaction for sender
             await this.Wallet.createTransaction(
               userId,
               false,
@@ -888,6 +893,28 @@ export class EventsServices {
                 recipientId: eventId,
                 recipientName: `charity&${event?.eventName}`,
               },
+            );
+
+            // create transaction for event creator (receiver)
+            // create credit transaction for recipient
+            await this.Wallet.createTransaction(
+              event?.creatorId,
+              true,
+              id,
+              status,
+              currency,
+              Number(amount) / 100,
+              {
+                name: actualName,
+                email: email,
+                phone_number: metadata?.customer?.phone_number,
+              },
+              ref,
+              'Charity recurrent payment',
+              'Bank withdrawal proccessed',
+              'paystack',
+              null,
+              { senderId: userId, senderName: `${actualName}` },
             );
           }
 
@@ -1249,7 +1276,7 @@ export class EventsServices {
               appointer: {
                 userId,
                 accepted: false,
-                money_value_willing_to_raise: amount,
+                money_value_willing_to_raise: Number(amount),
                 money_currency_willing_to_raise: currency,
                 has_paid: false,
               },
@@ -1273,7 +1300,7 @@ export class EventsServices {
       //send notif to event creator
       await this.notifservice.logSingleNotification(
         `A user has created an escrow on your event: ${newescrow?.eventName}.`,
-        newescrow.creatorId,
+        newescrow?.creatorId,
         userId,
         `/${eventId}/${newescrow?.currency}/amount/${newEscrowId}`,
         `escrow_creation/${newescrow?.eventName || 'Event Name'}`,
@@ -1506,6 +1533,9 @@ export class EventsServices {
         `/${eventId}/${userIsInvited?.currency}/amount/${escrowId}`,
         `escrow_invitation/${userIsInvited?.eventName || 'Event Name'}`,
       );
+
+      // await sendEmail()
+
       return res
         .status(200)
         .json({ msg: 'success', payload: 'Invitation sent' });
@@ -1542,7 +1572,17 @@ export class EventsServices {
         return res.status(404).json({
           msg: 'unsuccessful',
           payload:
-            'Something went wrong. Please ask your inviter to resend their invitation',
+            'Your inviter may have invitated someone else. Ask them to confirm if you are still the invitee. Else, they should resend an invitation to you',
+        });
+      }
+
+      //pull out invitee info
+      const inviteeInfo = await this.user.findOne({ _id: appointeeId });
+      if (!inviteeInfo) {
+        return res.status(404).json({
+          msg: 'unsuccessful',
+          payload:
+            'Your info could not be fetched. Please report this error message to customer service',
         });
       }
 
@@ -1553,6 +1593,8 @@ export class EventsServices {
           $set: {
             'escrow.$.appointee': {
               userId: appointeeId,
+              userName: `${inviteeInfo?.firstName} ${inviteeInfo?.lastName}`,
+              userEmail: `${inviteeInfo?.email}`,
               accepted: true,
               has_disbursed_payment: false,
             },
@@ -1685,9 +1727,10 @@ export class EventsServices {
         );
       }
       //check if user has paid. If yes, prevent further payment.
-      //CHECK IT HERE
+      //code not yet written
+      //Write it HERE
 
-      //withdraw money from user wallet and create wallet transactions
+      //withdraw money from user wallet
       await this.Wallet.validateUserWallet(userId);
       await this.Wallet.decreaseWallet(userId, amount, currency);
 
@@ -1702,10 +1745,12 @@ export class EventsServices {
       );
 
       if (!userShouldpay) {
+        //refund wallet
+        await this.Wallet.increaseWallet(userId, amount, currency, 'refund');
         return res.status(400).json({
           msg: 'unsuccessful',
           payload:
-            'has_paid property could not be updated. customer support for assistance',
+            'Escrow could not receive payment. Reach customer support for assistance',
         });
       }
 
@@ -1715,14 +1760,21 @@ export class EventsServices {
           _id: eventId,
           'escrow._id': escrowId,
         },
-        { $set: { 'escrow.$.escrowDetails.amount': Number(amount) } },
+        {
+          $set: {
+            'escrow.$.escrowDetails.amount': Number(amount),
+            'escrow.$.appointer.money_left_after_disbursement': Number(amount),
+          },
+        },
         { new: true },
       );
+
       if (!escrowAmountIncreases) {
+        await this.Wallet.increaseWallet(userId, amount, currency, 'refund');
         return res.status(400).json({
           msg: 'unsuccessful',
           payload:
-            'could not increase escrow amount. customer support for assistance',
+            'Escrow could not receive payment. Reach customer support for assistance',
         });
       }
 
@@ -1750,7 +1802,7 @@ export class EventsServices {
         `charityapp${Date?.now()}${Math?.random()}`,
         'In-app Transfer: Escrow payment',
         'In-app Transaction: Escrow payment',
-        'paystack',
+        'inapp_escrow',
         null,
         null,
         {
@@ -1824,27 +1876,53 @@ export class EventsServices {
       //check if event payment has reached threshold, Reject further payroll addition
       async function totalPtAndAmountDonated(event: any) {
         //find amount donated by donor to escrow
-        let amountDonated = event?.escrow.find(
+        let escrow = event?.escrow.find(
           (eachEscrow: any) => eachEscrow._id.toString() === escrowId,
-        )?.appointer?.money_value_willing_to_raise;
+        );
+
+        let amountDonated = escrow?.appointer?.money_left_after_disbursement;
 
         //check existing payment form (which could be an empty array) for total amount already paid out to participants
+        let paymentform = escrow?.paymentForm;
         let totalPayout: number = 0;
-        let paymentform = event?.escrow.find(
-          (eachEscrow: any) => eachEscrow._id.toString() === escrowId,
-        )?.paymentForm;
+
         paymentform?.map((eachUser: any) => {
           totalPayout = totalPayout + Number(eachUser?.amount_received) || 0;
         });
+
+        const escrowCompletionStatus =
+          escrow.escrowDetails.paymentCompletionStatus;
         return {
           amountDonated,
           totalPayout,
-          paymentformlength: paymentform?.length,
+          paymentformlength: Number(paymentform?.length),
+          escrowCompletionStatus,
         };
       }
 
-      const { totalPayout, amountDonated, paymentformlength } =
-        await totalPtAndAmountDonated(event);
+      const markEscrowAsComplete = async (
+        eventId: string,
+        escrowId: string,
+      ) => {
+        return await this.event.findOneAndUpdate(
+          { _id: eventId, 'escrow._id': escrowId },
+          {
+            $set: {
+              'escrow.$.escrowDetails.paidOut': true,
+              'escrow.$.escrowDetails.paymentCompletionStatus': 'complete',
+              'escrow.$.appointee.has_disbursed_payment': true,
+            },
+          },
+          { new: true },
+        );
+      };
+
+      const {
+        totalPayout,
+        amountDonated,
+        paymentformlength,
+        escrowCompletionStatus,
+      } = await totalPtAndAmountDonated(event);
 
       if (paymentformlength > 0 && totalPayout === 0) {
         return res.status(400).json({
@@ -1852,37 +1930,43 @@ export class EventsServices {
           payload: 'Total payout cannot be zero.',
         });
       }
-      if (totalPayout >= Number(amountDonated)) {
-        //in case it has been donw, set escrow paidOut to true
+
+      if (paymentformlength > 0 && Number(amountDonated) === 0) {
+        //in case it has been done, set escrow paidOut to true
+        await markEscrowAsComplete(eventId, escrowId);
+        //then return error message indicating total amount given to escrow has been out
+        return res.status(400).json({
+          msg: 'unsuccessful',
+          payload: `Threshold for the payout ${event?.currency} ${amountDonated} has been reached. You cannot disburse funds further to any other participant`,
+        });
+      }
+      // console.log('escrowCompletionStatus', escrowCompletionStatus);
+      if (escrowCompletionStatus === 'nill') {
+        //in case it has been done, set escrow paidOut to true
         await this.event.findOneAndUpdate(
           { _id: eventId, 'escrow._id': escrowId },
           {
             $set: {
-              'escrow.$.escrowDetails.paidOut': true,
-              'escrow.$.appointee.has_disbursed_payment': true,
+              'escrow.$.escrowDetails.paymentCompletionStatus': 'partial',
             },
           },
           { new: true },
         );
-        //then return error message indicating total amount given to escrow has been out
-        return res.status(400).json({
-          msg: 'unsuccessful',
-          payload: `Threshold for the payout ${event?.currency} ${amountDonated} has been reached. You cannot disburse funds to any other participant`,
-        });
       }
 
       //Get the existing escrow payment form, if any.
-      //Necessary for detecting which user has been paid, if past payment to the payment list has been partial for whatever reasons
+      //Necessary for detecting which user has been paid,
+      //if past payment to the payment list has been partial for whatever reasons
       const existingEscrowPaymentForm =
         event?.escrow?.find(
-          (eachescrow) => eachescrow._id.toString() === escrowId,
+          (eachescrow) => eachescrow?._id?.toString() === escrowId,
         )?.paymentForm || [];
       // console.log('existingEscrowPaymentForm', existingEscrowPaymentForm)
       //filter out the payroll array from request object into normal participants and the charity/event itself, if any
-      const normalparticipants = payroll.filter(
+      const normalparticipants = payroll?.filter(
         (eachParti) => eachParti?.type === 'individual',
       );
-      const charity = payroll.filter(
+      const charity = payroll?.filter(
         (eachParti) => eachParti?.type === 'charity',
       );
 
@@ -1891,61 +1975,47 @@ export class EventsServices {
         promises = normalparticipants?.map(async (participant) => {
           const { _id: userId, amount } = participant;
 
+          //find user
+          const user = await this.user.findOne({ _id: userId });
+          if (!user) {
+            return res.status(400).json({
+              msg: 'unsuccessful',
+              payload: `This user on your payroll with id "${userId}" does not exist. Remove the user to continue payment`,
+            });
+          }
           // find each user using participantId
-          const userhasbeenpaid = existingEscrowPaymentForm.find((eachuser) => {
-            return (
-              eachuser.userId.toString() === userId && eachuser?.paid === true
-            );
-          });
+          const userIsOnDatabasePaymentForm = existingEscrowPaymentForm?.find(
+            (eachuser) => {
+              return eachuser?.userId?.toString() === userId;
+            },
+          );
+          // console.log('userisonpayForm', userIsOnDatabasePaymentForm);
 
-          // console.log('this works');
-          //only proceed if user has not been paid. Else, do nothing.
-          if (!userhasbeenpaid) {
-            const user = await this.user.findOne({ _id: userId });
-            if (!user) {
-              return res.status(400).json({
-                msg: 'unsuccessful',
-                payload: 'This user does not exist',
-              });
-            }
-            const currency = event?.currency;
-            await this.Wallet.validateUserWallet(userId);
-            await this.Wallet.increaseWallet(userId, amount, currency, null);
-            await this.Wallet.createWalletTransactions(
-              userId,
-              true,
-              'successful',
-              currency,
-              amount,
-              'Wallet Top-up: Escrow payment',
-              'In-app Transaction: Escrow payment',
-            );
+          let adduserToPaymentForm;
 
-            await this.Wallet.createTransaction(
-              userId,
-              true,
-              `${(Math.random() * 10000).toFixed(0)}${Date.now()}`,
-              'successful',
-              currency,
-              amount,
+          if (userIsOnDatabasePaymentForm) {
+            //update existing record of user on payment form
+            adduserToPaymentForm = await this.event.findOneAndUpdate(
+              { _id: eventId }, // Match the document where the userId exists within the paymentForm array
               {
-                email: user?.email,
-                phone_number: user?.phoneNumber,
-                name: `${user?.firstName} ${user?.lastName}`,
+                $inc: {
+                  'escrow.$[outer].paymentForm.$[inner].amount_received':
+                    Number(amount), // Increment the amount_received by the specified amount
+                  'escrow.$[outer].appointer.money_left_after_disbursement':
+                    -Number(amount), // Decrement the money_left_after_disbursement by the specified amount
+                },
               },
-              `charityapp${Date?.now()}${Math?.random()}`,
-              'Wallet Top-up: Escrow payment',
-              'In-app Transaction: Escrow payment',
-              'escrow',
-              null,
               {
-                senderId: `${escrowId}`,
-                senderName: `event&escrow&${event?.eventName}`,
+                arrayFilters: [
+                  { 'outer._id': escrowId }, // Filter the outer array to find the correct escrow
+                  { 'inner.userId': userId }, // Filter the inner array to find the correct paymentForm object
+                ],
+                new: true, // Return the modified document
               },
             );
-
-            //push successful user payment record into payment form
-            await this.event.findOneAndUpdate(
+            // console.log("worked", worked.escrow)
+          } else {
+            adduserToPaymentForm = await this.event.findOneAndUpdate(
               { _id: eventId, 'escrow._id': escrowId },
               {
                 $push: {
@@ -1955,41 +2025,104 @@ export class EventsServices {
                     paid: true,
                   },
                 },
+                $inc: {
+                  'escrow.$.appointer.money_left_after_disbursement':
+                    -Number(amount),
+                },
               },
               { new: true },
             );
+
+            const currency = event?.currency;
+            if (adduserToPaymentForm) {
+              await this.Wallet.validateUserWallet(userId);
+              await this.Wallet.increaseWallet(userId, amount, currency, null);
+              await this.Wallet.createWalletTransactions(
+                userId,
+                true,
+                'successful',
+                currency,
+                amount,
+                'Wallet Top-up: Escrow payment',
+                'In-app Transaction: Escrow payment',
+              );
+              await this.Wallet.createTransaction(
+                userId,
+                true,
+                `${(Math.random() * 10000).toFixed(0)}${Date.now()}`,
+                'successful',
+                currency,
+                amount,
+                {
+                  email: user?.email,
+                  phone_number: user?.phoneNumber,
+                  name: `${user?.firstName} ${user?.lastName}`,
+                },
+                `charityapp${Date?.now()}${Math?.random()}`,
+                'Wallet Top-up: Escrow payment',
+                'In-app Transaction: Escrow payment',
+                'inapp_escrow',
+                null,
+                {
+                  senderId: `${escrowId}`,
+                  senderName: `event&escrow&${event?.eventName}`,
+                },
+              );
+            }
           }
         });
       }
 
       if (charity?.length > 0) {
         const { amount } = charity[0];
-        //check if charity has been paid. To avoid double payment
-        const charityhasbeenpaid = existingEscrowPaymentForm.find((charity) => {
-          return (
-            charity.userId.toString() === eventId && charity?.paid === true
-          );
-        });
-        //if charity has not been paid, proceed. Else, do nothing.
-        if (!charityhasbeenpaid) {
-          const updatedEvent = await this.event.findOneAndUpdate(
-            { _id: eventId },
+        //check if charity already on database payment form
+        //if yes, increase charity payment. If no, initiate new payment
+        const charityIsOnPaymentForm = existingEscrowPaymentForm.find(
+          (charity) => {
+            return charity.userId.toString() === eventId;
+          },
+        );
+        const updatedEvent = await this.event.findOneAndUpdate(
+          { _id: eventId },
+          {
+            $inc: {
+              totalEventAmount: amount,
+              totalEventAmountFromEscrow: amount,
+            },
+          },
+          { new: true },
+        );
+
+        if (!updatedEvent) {
+          return res.status(400).json({
+            msg: 'unsuccessful',
+            payload:
+              'Something went wrong paying charity. Try again or contact support',
+          });
+        }
+
+        //push charity info into payment form
+        if (charityIsOnPaymentForm) {
+          //update existing record of user on payment form
+          await this.event.findOneAndUpdate(
+            { 'escrow.paymentForm.userId': eventId }, // Match the document where the userId exists within the paymentForm array
             {
               $inc: {
-                totalEventAmount: amount,
-                totalEventAmountFromEscrow: amount,
+                'escrow.$[outer].paymentForm.$[inner].amount_received':
+                  Number(amount), // Increment the amount_received by the specified amount
+                'escrow.$[outer].appointer.money_left_after_disbursement':
+                  -Number(amount),
               },
             },
-            { new: true },
+            {
+              arrayFilters: [
+                { 'outer.paymentForm.userId': eventId }, // Filter the outer array to find the correct escrow
+                { 'inner.userId': eventId }, // Filter the inner array to find the correct paymentForm object
+              ],
+              new: true, // Return the modified document
+            },
           );
-          if (!updatedEvent) {
-            return res.status(400).json({
-              msg: 'unsuccessful',
-              payload:
-                'Something went wrong paying charity. Try again or contact support',
-            });
-          }
-          //push charity info into payment form
+        } else {
           await this.event.findOneAndUpdate(
             { _id: eventId, 'escrow._id': escrowId },
             {
@@ -1999,6 +2132,10 @@ export class EventsServices {
                   amount_received: amount,
                   paid: true,
                 },
+              },
+              $inc: {
+                'escrow.$.appointer.money_left_after_disbursement':
+                  -Number(amount),
               },
             },
             { new: true },
@@ -2013,30 +2150,26 @@ export class EventsServices {
       let appointeeHasDisbursedPayment = await this.event.findOne({
         _id: eventId,
       });
-      const { totalPayout: totalPayout2, amountDonated: amountDonated2 } =
-        await totalPtAndAmountDonated(appointeeHasDisbursedPayment);
 
-      // console.log(totalPayout2, amountDonated2);
-      if (totalPayout2 >= Number(amountDonated2)) {
-        //if the above statement is true, set escrow paidOut and appointeeHasDisbursedPayment to true
-        appointeeHasDisbursedPayment = await this.event.findOneAndUpdate(
-          { _id: eventId, 'escrow._id': escrowId },
-          {
-            $set: {
-              'escrow.$.escrowDetails.paidOut': true,
-              'escrow.$.appointee.has_disbursed_payment': true,
-            },
-          },
-          { new: true },
+      const {
+        totalPayout: totalPayout2,
+        amountDonated: amountDonated2,
+        paymentformlength: paymentformlength2,
+      } = await totalPtAndAmountDonated(appointeeHasDisbursedPayment);
+
+      if (paymentformlength2 > 0 && Number(amountDonated2) === 0) {
+        appointeeHasDisbursedPayment = await markEscrowAsComplete(
+          appointeeHasDisbursedPayment._id,
+          escrowId,
         );
+      }
 
-        if (!appointeeHasDisbursedPayment) {
-          return res.status(400).json({
-            msg: 'unsuccessful',
-            payload:
-              'This escrow could not be found or does not exist. Contact customer support for assistance',
-          });
-        }
+      if (!appointeeHasDisbursedPayment) {
+        return res.status(400).json({
+          msg: 'unsuccessful',
+          payload:
+            'Something went wrong marking escrow as completed. Contact customer support for assistance',
+        });
       }
 
       const escrow = appointeeHasDisbursedPayment?.escrow?.find(

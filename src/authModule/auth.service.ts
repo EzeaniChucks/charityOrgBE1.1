@@ -11,13 +11,12 @@ import * as bcrypt from 'bcryptjs';
 import * as nodemailer from 'nodemailer';
 import { InjectModel } from '@nestjs/mongoose';
 import * as cryptos from 'crypto';
-import * as emailjs from '@emailjs/nodejs';
 import mongoose, { Model } from 'mongoose';
 import { PaymentController } from 'src/paymentModule/payment.controller';
 import { PaymentService } from 'src/paymentModule/payment.service';
 import { AdminSettingsService } from 'src/adminSettingsModule/adminSettings.service';
 import { Request, Response, response } from 'express';
-import { attachCookiesToResponse, jwtIsValid } from 'src/util';
+import { attachCookiesToResponse, jwtIsValid, sendEmail } from 'src/util';
 import { CloudinaryService } from 'src/cloudinary/cloudinary.services';
 import * as request from 'request';
 import * as jwt from 'jsonwebtoken';
@@ -230,42 +229,6 @@ export class AuthService {
             });
           }
 
-          // emailjs
-          //   .send(
-          //     // 'service_n45yy8t',
-          //     'service_1c2jn2j',
-          //     'template_22ku158',
-          //     {
-          //       name: `${user?.firstName} ${user?.lastName}`,
-          //       email: `${user.email}`,
-          //       // email: 'testingtestguy1@gmail.com',
-          //       message: `
-          //             <div>
-          //               <h4>Email account verification</h4>
-          //               <h5>Click on the button below to verify your email address</h5>
-          //               <button><a style='padding:5px; border-radius:10px;' href='${process.env.FRONT_END_CONNECTION}/verify?verificationToken=${verificationToken}&email=${user?.email}'>Verify Email</a></button>
-          //               </div>
-          //           `,
-          //     },
-          //     {
-          //       publicKey: '7UpYhI4ulL04ybL_j',
-          //       privateKey: 't-HI5fwlLdMx_qOM7QfRx',
-          //     },
-          //   )
-          //   .then(
-          //     (response) => {
-          //       return res.status(200).json({
-          //         msg: 'success! we sent you an email to verify your account',
-          //         payload: response,
-          //       });
-          //     },
-          //     (err) => {
-          //       return res
-          //         .status(400)
-          //         .json({ msg: 'unsuccessful', payload: err });
-          //     },
-          //   );
-
           const { _id } = user;
           return res.status(200).json({
             msg: 'successful',
@@ -324,43 +287,31 @@ export class AuthService {
         },
       );
 
-      emailjs
-        .send(
-          'service_n45yy8t', //moi
-          // 'service_1c2jn2j',
-          'template_22ku158',
-          {
-            name: `${user?.firstName} ${user?.lastName}`,
-            email: `${user?.email}`,
-            message: `
-                    <div>
-                      <h4>Email account verification</h4>
-                      <h5>Click on the button below to verify your email address</h5>
-                      <button><a style='padding:5px; border-radius:10px;' href='${process.env.FRONT_END_CONNECTION}/verify?verificationToken=${verificationToken}&email=${user?.email}'>Verify Email</a></button>
-                      </div>
-                  `,
-          },
-          {
-            publicKey: '7UpYhI4ulL04ybL_j',
-            privateKey: 't-HI5fwlLdMx_qOM7QfRx',
-          },
-        )
-        .then(
-          (response) => {
-            return res.status(200).json({
-              msg: 'success! we sent you an email to verify your account',
-              user: {
-                _id,
-                email,
-                token,
-              },
-            });
-          },
-          (err) => {
-            console.log('email err', err);
-            return res.status(400).json({ msg: 'unsuccessful', payload: err });
-          },
-        );
+      sendEmail(
+        user,
+        `
+          <div>
+            <h4>Email account verification</h4>
+            <h5>Click on the button below to verify your email address</h5>
+            <button><a style='padding:5px; border-radius:10px;' href='${process.env.FRONT_END_CONNECTION}/verify?verificationToken=${verificationToken}&email=${user?.email}'>Verify Email</a></button>
+            </div>
+        `
+      ).then(
+        (response) => {
+          return res.status(200).json({
+            msg: 'success! we sent you an email to verify your account',
+            user: {
+              _id,
+              email,
+              token,
+            },
+          });
+        },
+        (err) => {
+          console.log('email err', err);
+          return res.status(400).json({ msg: 'unsuccessful', payload: err });
+        },
+      );
     } catch (err) {
       console.log('normal err', err);
       return res.status(500).json({ msg: err.message });
@@ -429,38 +380,26 @@ export class AuthService {
         });
       }
 
-      emailjs
-        .send(
-          'service_n45yy8t',
-          'template_22ku158',
-          {
-            name: `${tokenifiedUser?.firstName} ${tokenifiedUser?.lastName}`,
-            email: `${tokenifiedUser.email}`,
-            // email: 'testingtestguy1@gmail.com',
-            message: `
-                    <div>
-                      <h4>CharityOrg Account Password reset</h4>
-                      <h5>Click on the button below to reset your password</h5>
-                      <button><a style='padding:10px; border-radius:10px' href='${process.env.FRONT_END_CONNECTION}/resetPassword?verificationToken=${resetToken}&email=${tokenifiedUser?.email}'>Reset Password</a></button>
-                      </div>
-                  `,
-          },
-          {
-            publicKey: '7UpYhI4ulL04ybL_j',
-            privateKey: 't-HI5fwlLdMx_qOM7QfRx',
-          },
-        )
-        .then(
-          (response) => {
-            return res.status(200).json({
-              msg: `success! we sent an email to you at ${tokenifiedUser.email}. Please visit to reset your password`,
-              payload: response,
-            });
-          },
-          (err) => {
-            return res.status(400).json({ msg: 'unsuccessful', payload: err });
-          },
-        );
+      sendEmail(
+        tokenifiedUser,
+        `
+          <div>
+            <h4>CharityOrg Account Password reset</h4>
+            <h5>Click on the button below to reset your password</h5>
+            <button><a style='padding:10px; border-radius:10px' href='${process.env.FRONT_END_CONNECTION}/resetPassword?verificationToken=${resetToken}&email=${tokenifiedUser?.email}'>Reset Password</a></button>
+            </div>
+        `,
+      ).then(
+        (response) => {
+          return res.status(200).json({
+            msg: `success! we sent an email to you at ${tokenifiedUser.email}. Please visit to reset your password`,
+            payload: response,
+          });
+        },
+        (err) => {
+          return res.status(400).json({ msg: 'unsuccessful', payload: err });
+        },
+      );
     } catch (err) {
       return res.status(500).json({ msg: err?.message });
     }

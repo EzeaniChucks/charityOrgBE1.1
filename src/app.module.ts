@@ -33,6 +33,8 @@ import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 import { VirtualCardModule } from './virtualCardModule/virtualCard.module';
 import { VirtualCardsChecker } from './middleware/virtualCards.middleware';
 import { VirtualCardController } from './virtualCardModule/virtualCard.controller';
+import { WithdrawIntentModule } from './withdrawalIntent/withdrawalIntent.module';
+import { CreeateVCIntentModule } from './createVirtualCardIntent/creeateVCIntent.module';
 
 @Module({
   imports: [
@@ -52,6 +54,8 @@ import { VirtualCardController } from './virtualCardModule/virtualCard.controlle
     MembershipModule,
     SubscriptionsModule,
     VirtualCardModule,
+    WithdrawIntentModule,
+    CreeateVCIntentModule,
   ],
   controllers: [AppController],
   providers: [AppService],
@@ -75,39 +79,39 @@ export class AppModule implements NestModule {
         },
       )
       .forRoutes(PaymentController);
-        consumer
-          .apply(EventsChecker)
-          .exclude(
-            {
-              path: 'get_all_events',
-              method: RequestMethod.GET,
-            },
-            {
-              path: '/get_single_event/:eventId',
-              method: RequestMethod.GET,
-            },
-            {
-              path: '/event_creator_details/:creatorId',
-              method: RequestMethod.GET,
-            },
-            {
-              path: '/recurrent_payment_with_card_for_charities_cron',
-              method: RequestMethod.GET,
-            },
-            {
-              path: '/recurrent_payment_with_wallet_for_charities_cron',
-              method: RequestMethod.GET,
-            },
-            {
-              path: '/recurrent_payment_with_card_for_individual_cron',
-              method: RequestMethod.GET,
-            },
-            {
-              path: '/recurrent_payment_with_wallet_for_individual_cron',
-              method: RequestMethod.GET,
-            },
-          )
-          .forRoutes(EventsController);
+    consumer
+      .apply(EventsChecker)
+      .exclude(
+        {
+          path: 'get_all_events',
+          method: RequestMethod.GET,
+        },
+        {
+          path: '/get_single_event/:eventId',
+          method: RequestMethod.GET,
+        },
+        {
+          path: '/event_creator_details/:creatorId',
+          method: RequestMethod.GET,
+        },
+        {
+          path: '/recurrent_payment_with_card_for_charities_cron',
+          method: RequestMethod.GET,
+        },
+        {
+          path: '/recurrent_payment_with_wallet_for_charities_cron',
+          method: RequestMethod.GET,
+        },
+        {
+          path: '/recurrent_payment_with_card_for_individual_cron',
+          method: RequestMethod.GET,
+        },
+        {
+          path: '/recurrent_payment_with_wallet_for_individual_cron',
+          method: RequestMethod.GET,
+        },
+      )
+      .forRoutes(EventsController);
     consumer.apply(AdminChecker).forRoutes(AdminSettingsController);
     consumer.apply(VirtualCardsChecker).forRoutes(VirtualCardController);
   }

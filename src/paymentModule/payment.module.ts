@@ -14,6 +14,7 @@ import { eventSchema } from 'src/eventsModule/events.model';
 import { eventDetailsSchema } from 'src/eventDetailsModule/eventDetails.model';
 import { notificationSchema } from 'src/notificationModule/notifModel';
 import { NotifModule } from 'src/notificationModule/notifModule';
+import { withdrawalIntentSchema } from 'src/withdrawalIntent/withdrawal.model';
 
 @Module({
   imports: [
@@ -34,6 +35,10 @@ import { NotifModule } from 'src/notificationModule/notifModule';
     MongooseModule.forFeature([{ name: 'wallet', schema: walletSchema }]),
     MongooseModule.forFeature([
       { name: 'CharityAppUsers', schema: userSchema },
+    ]),
+
+    MongooseModule.forFeature([
+      { name: 'withdrawalIntent', schema: withdrawalIntentSchema },
     ]),
     forwardRef(() => AuthModule),
     // AuthModule,

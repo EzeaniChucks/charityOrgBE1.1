@@ -205,13 +205,10 @@ export class PaymentController {
     @Body() body: SendMoneyToUserBankDTO,
     @Res() res: Response,
   ) {
-    const { amount, userId, currency, account_bank, account_number } = body;
+    const { userId, withdrawalIntentId } = body;
     return this.paymentservice.flSendMoneyToBank(
       userId,
-      amount,
-      currency,
-      account_bank,
-      account_number,
+      withdrawalIntentId,
       res,
     );
   }

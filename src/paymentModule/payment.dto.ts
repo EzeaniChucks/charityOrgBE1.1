@@ -39,16 +39,11 @@ export class fetchCountryBankDTO {
 }
 
 export class SendMoneyToUserBankDTO {
-  @ApiProperty({ example: 40000 })
-  amount: number;
   @ApiProperty({ example: 'mongooseGeneratedId' })
   userId: string;
-  @ApiProperty({ example: 'NGN' })
-  currency: string;
-  @ApiProperty({ example: 'GTbank' })
-  account_bank: string;
-  @ApiProperty({ example: '003797687303' })
-  account_number: string;
+
+  @ApiProperty({ example: 'mongooseGeneratedId' })
+  withdrawalIntentId: string;
 }
 
 //For flutterwave webhook. To do something when transer is successful or fails
@@ -111,30 +106,30 @@ export class PayStackBVNIdentityValidationDTO {
     description: `User's mongoose id after creation`,
   })
   userId: string;
-  
+
   @ApiProperty({
     example: 'NG',
     description: `Two-letter country code`,
   })
-  country:string;
+  country: string;
 
   @ApiProperty({
     example: '9770097986',
     description: `Ten-digit account number`,
   })
-  account_number:string;
-  
+  account_number: string;
+
   @ApiProperty({
     example: '97700979869',
     description: `Eleven-digit bank verification number`,
   })
-  bvn:string;
-  
+  bvn: string;
+
   @ApiProperty({
     example: '058',
     description: `Three-digit bank code. E.g. Gtbank has 058 as code`,
   })
-    bank_code:string;
+  bank_code: string;
 }
 export class PayStackBVNValidationResponseDTO {
   @ApiProperty({
@@ -192,7 +187,7 @@ export class PayStackUpdateCustomerDTO {
   })
   email?: string;
   @ApiProperty({
-  example: '+2348000000000',
+    example: '+2348000000000',
   })
   phone?: string;
 }

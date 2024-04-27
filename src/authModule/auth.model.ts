@@ -16,6 +16,9 @@ export const userSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  profilePic: {
+    type: String,
+  },
   promoCode: {
     type: String,
   },
@@ -40,8 +43,8 @@ export const userSchema = new mongoose.Schema({
     enum: ['individual', 'organization'],
   },
   is_offically_verified: { type: Boolean, default: false },
-  offical_verification_bank_statement: { type: String, default: '' },
-  official_verification_id: { type: String, default: '' },
+  offical_verification_bank_statement: { type: String, default: '' }, //photo link on cloudinary
+  official_verification_id: { type: String, default: '' }, //photo link on cloudinary
   isAdmin: { type: Boolean, default: false },
   subscription: {
     subscription_type: { type: String, default: 'free' },
