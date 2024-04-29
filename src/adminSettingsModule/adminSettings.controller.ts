@@ -1,4 +1,14 @@
-import { Body, Controller, Get, Post, Put, Req, Res } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Put,
+  Query,
+  Req,
+  Res,
+} from '@nestjs/common';
 import { AdminSettingsService } from './adminSettings.service';
 import { ApiOkResponse, ApiProperty, ApiTags } from '@nestjs/swagger';
 import {
@@ -46,6 +56,20 @@ export class AdminSettingsController {
       req,
       res,
     );
+  }
+
+  @Get('get_verification_intent')
+  @ApiTags('Admin')
+  async fetchVerificationIntents(
+    @Query('status') status: 'attended' | 'awaiting' | 'all',
+    @Res() res: Response,
+  ) {
+    if (!status) {
+      return res.status(400).json({
+        msg: 'status query parameter should not be empty. Enums can be attended, unattended or all',
+      });
+    }
+    return this.adminsettingsservice.fetchVerificationIntents(status, res);
   }
 
   //set wallet charge range

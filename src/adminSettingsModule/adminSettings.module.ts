@@ -9,6 +9,7 @@ import { userSchema } from 'src/authModule/auth.model';
 import { eventSchema } from 'src/eventsModule/events.model';
 import { membershipSchema } from 'src/membership/membership.model';
 import { accountValIntentSchema } from 'src/accountValidationIntent/accountValIntent.model';
+import { NotifModule } from 'src/notificationModule/notifModule';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { accountValIntentSchema } from 'src/accountValidationIntent/accountValIn
       { name: 'accountValIntent', schema: accountValIntentSchema },
     ]),
     PaymentModule,
+    NotifModule,
   ],
   controllers: [AdminSettingsController],
   providers: [AdminSettingsService],

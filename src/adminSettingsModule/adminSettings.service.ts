@@ -16,6 +16,7 @@ import { Request, Response } from 'express';
 import { chargeRangeDeletionDTO } from './adminSettings.dto';
 import { sendEmail } from 'src/util';
 import * as request from 'request';
+import { NotifService } from 'src/notificationModule/notifService';
 
 @Injectable()
 export class AdminSettingsService {
@@ -26,6 +27,7 @@ export class AdminSettingsService {
     @InjectModel('membership') private membership: Model<any>,
     @InjectModel('accountValIntent') private accountValIntent: Model<any>,
     private paymentservice: PaymentService,
+    private notificationservice: NotifService,
   ) {}
 
   async confirmAdminStatus(req: any) {
@@ -90,21 +92,21 @@ export class AdminSettingsService {
             payload: result,
           });
         }
-        try{
+        try {
           user.paystack_customer_code = result?.data?.customer_code;
           user.paystack_customer_id = result?.data?.id;
           user.paystack_customer_integration = result?.data?.integration;
-          if(!user?.country){
+          if (!user?.country) {
             user.country = 'nigeria';
           }
           await user.save();
           return res
             .status(200)
             .json({ msg: 'successful', payload: 'paystack customer created' });
-        }catch(err){
+        } catch (err) {
           return res
             ?.status(500)
-            ?.json({ payload: 'server error', msg: err?.message });   
+            ?.json({ payload: 'server error', msg: err?.message });
         }
       });
     } catch (err: any) {
@@ -157,25 +159,24 @@ export class AdminSettingsService {
     }
   }
 
-  async fetchVerificationIntents(req: Request, res: Response) {
+  async fetchVerificationIntents(
+    status: 'attended' | 'awaiting' | 'all',
+    res: Response,
+  ) {
     try {
-      const { status } = req.query;
       let intents;
-
       if (status === 'attended') {
         intents = await this.accountValIntent.find({
           intentStatus: 'attended',
         });
       }
-      if (status === 'unattended') {
+      if (status === 'awaiting') {
         intents = await this.accountValIntent.find({
-          intentStatus: 'unattended',
+          intentStatus: 'awaiting',
         });
       }
       if (status === 'all') {
-        intents = await this.accountValIntent.find({
-          intentStatus: 'unattended',
-        });
+        intents = await this.accountValIntent.find();
       }
 
       return res.status(200).json({ msg: 'successful', payload: intents });
@@ -207,6 +208,14 @@ export class AdminSettingsService {
         await this.accountValIntent.findOneAndUpdate(
           { userId },
           { $set: { intentStatus: 'attended', verdict: 'satisfied' } },
+        );
+
+        await this.notificationservice.logSingleNotification(
+          'Your photo_Id is approved and your account is now fully verified',
+          user?._id,
+          '65c681387a7de5645968486f',
+          `${process.env.FRONT_END_CONNECTION}/user/${user?._id}`,
+          'account_verification',
         );
 
         await sendEmail(

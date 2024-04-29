@@ -175,13 +175,15 @@ export class AuthController {
   }
 
   @Post('auth/accept_govt_issued_id_card')
+  @UseInterceptors(FileInterceptor('idCard'))
   @ApiTags('Auth')
   acceptGovermentIssuedIdCard(
+    @UploadedFile() idCard: Express.Multer.File,
     @Body() body: EditUserDetailsDTO,
     @Req() req: Request,
     @Res() res: Response,
   ) {
-    const { userId, idCard } = body;
+    const { userId } = body;
     return this.authservice.acceptGovermentIssuedIdCard(
       userId,
       idCard,

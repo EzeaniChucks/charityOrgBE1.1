@@ -11,12 +11,12 @@ export const accountValIntentSchema = new mongoose.Schema(
     accountName: { type: String, required: true },
     intentStatus: {
       type: String,
-      enum: ['unattended', 'attended'],
-      default: 'unattended',
+      enum: ['attended', 'awaiting'],
+      default: 'awaiting',
     },
     verdict: {
       type: String,
-      enum: ['satisfied', 'dissatisfied'],
+      enum: ['', 'satisfied', 'dissatisfied'],
       default: '',
     },
     dissatisfaction_reason: { type: String, default: '' },

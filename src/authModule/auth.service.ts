@@ -484,6 +484,7 @@ export class AuthService {
         accountBankVerified,
         subscription,
         bundle,
+        country,
       } = user;
 
       if (decodedUser._id.toString() !== userId && !decodedUser.isAdmin) {
@@ -499,12 +500,25 @@ export class AuthService {
             isAdmin,
             address,
             profilePic,
-            // is_offically_verified,
-            // accountBankVerified,
           },
         });
       }
+      const extraObjects = {};
 
+      if (is_offically_verified) {
+        extraObjects['accountBank'] = user?.accountBank;
+        extraObjects['accountNumber'] = user?.accountNumber;
+        extraObjects['accountName'] = user?.accountName;
+        extraObjects['accountBankCode'] = user?.accountBankCode;
+        extraObjects['accountCurrency'] = user?.accountCurrency;
+      }
+      const accountValidationStatus = await this.accountValIntent.findOne({
+        userId: _id,
+      });
+      if (accountBankVerified) {
+        extraObjects['idValidationStatus'] =
+          accountValidationStatus.intentStatus;
+      }
       return res.status(200).json({
         msg: 'success',
         user: {
@@ -514,12 +528,9 @@ export class AuthService {
           lastName,
           phoneNumber,
           address,
+          country,
           profilePic,
-          accountBank: user.accountBank,
-          accountNumber: user.accountNumber,
-          accountName: user.accountName,
-          accountBankCode: user.accountBankCode,
-          accountCurrency: user.accountCurrency,
+          ...extraObjects,
           is_offically_verified,
           accountBankVerified,
           isVerified,
@@ -854,11 +865,12 @@ export class AuthService {
         firstName,
         lastName,
         phoneNumber,
-        profilePic:profilePicture,
+        profilePic: profilePicture,
         address: useraddress,
         is_offically_verified,
         accountBankVerified,
         isAdmin,
+        country,
         subscription,
         bundle,
       } = user;
@@ -872,7 +884,13 @@ export class AuthService {
         extraObjects['accountBankCode'] = user?.accountBankCode;
         extraObjects['accountCurrency'] = user?.accountCurrency;
       }
-
+      const accountValidationStatus = await this.accountValIntent.findOne({
+        userId: _id,
+      });
+      if (accountBankVerified) {
+        extraObjects['idValidationStatus'] =
+          accountValidationStatus.intentStatus;
+      }
       return res.status(200).json({
         msg: 'success',
         user: {
@@ -880,9 +898,10 @@ export class AuthService {
           email: email,
           firstName,
           lastName,
-          profilePic:profilePicture,
+          profilePic: profilePicture,
           phoneNumber,
           address: useraddress,
+          country,
           ...extraObjects,
           accountBankVerified,
           is_offically_verified,
@@ -938,6 +957,24 @@ export class AuthService {
       }
 
       if (idCard) {
+        //first check if user doesn't have pending verification intent
+        const pendingIntent = await this.accountValIntent.findOne({ userId });
+        if (pendingIntent && pendingIntent?.intentStatus === 'awaiting') {
+          return res
+            .status(400)
+            .json({ msg: 'You have an awaiting request already' });
+        }
+        if (
+          pendingIntent &&
+          pendingIntent?.intentStatus === 'attended' &&
+          pendingIntent?.verdict === 'satisfied'
+        ) {
+          return res
+            .status(400)
+            .json({
+              msg: 'Your account seems to be verified already. Check your notification or reach to customer support for confirmation',
+            });
+        }
         const admin = await this.User.findOne({ _id: process?.env?.ADMIN_ID });
 
         const result = await this.cloudinary.uploadImage(idCard?.buffer);
@@ -967,15 +1004,16 @@ export class AuthService {
               'Verification document could not be saved. Please try again or contact customer support',
             );
         }
-
+        // console.log(user)
         const valIntent = await this.accountValIntent.create({
           userId,
           userName: `${user?.firstName} ${user?.lastName}`,
           govt_issued_id_doc: result?.secure_url,
-          accountBankCode: user?.accountBankcode,
+          accountBankCode: user?.accountBankCode,
           accountBankName: user?.accountBank,
           accountNumber: user?.accountNumber,
           accountName: user?.accountName,
+          intentStatus: 'awaiting',
         });
 
         if (!valIntent) {
@@ -991,7 +1029,7 @@ export class AuthService {
           <div>
             <h4>New Verification Intent</h4>
             <h5>A user ${user?.firstName} ${user?.lastName} wants to be verified</h5>
-            <button><a style='padding:5px; border-radius:10px;' href='${process.env.FRONT_END_CONNECTION}/adminDashboard/${admin._id}/manage_account_verification'>View Validation Intent</a></button>
+            <button><a style='padding:5px; border-radius:10px;' href='${process.env.FRONT_END_CONNECTION}/adminDashboard/${admin._id}/manage_account_verification_intent'>View Validation Intent</a></button>
             </div>
         `,
         );
@@ -999,7 +1037,7 @@ export class AuthService {
         return res.status(200).json({
           msg: 'success',
           payload:
-            'Verification intent has been created. Approval status will communicated to you within the next hour',
+            'Verification intent has been created. Approval status will communicated to you soon',
         });
       }
     } catch (err) {
