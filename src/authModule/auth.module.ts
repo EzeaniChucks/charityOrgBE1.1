@@ -9,6 +9,7 @@ import { walletSchema } from 'src/paymentModule/payment.model';
 import { AdminSettingsModule } from 'src/adminSettingsModule/adminSettings.module';
 import { adminSchema } from 'src/adminSettingsModule/adminSettings.model';
 import { CloudinaryModule } from 'src/cloudinary/cloudinary.module';
+import { accountValIntentSchema } from 'src/accountValidationIntent/accountValIntent.model';
 
 @Module({
   imports: [
@@ -17,6 +18,9 @@ import { CloudinaryModule } from 'src/cloudinary/cloudinary.module';
     ]),
     MongooseModule.forFeature([{ name: 'wallet', schema: walletSchema }]),
     MongooseModule.forFeature([{ name: 'adminsettings', schema: adminSchema }]),
+    MongooseModule.forFeature([
+      { name: 'accountValIntent', schema: accountValIntentSchema },
+    ]),
     forwardRef(() => PaymentModule),
     // PaymentModule,
     AdminSettingsModule,

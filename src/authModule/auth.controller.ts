@@ -10,12 +10,27 @@ import {
   UseInterceptors,
   UploadedFiles,
   Req,
+  UploadedFile,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { Request, Response } from 'express';
-import { FilesInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { File } from 'buffer';
-import { CompleteRegisterResponseDTO, EditAccountDetailsDTO, EditAccountDetailsResponseDTO, EditUserBundleAmountDTO, EditUserSubTypeDTO, LoginDTO, LoginResponseDTO, LogoutResponseDTO, RegisterDTO, SearchUserResponseDTO, StartRegisterResponseDTO, VerifyEmailDTO, VerifyEmailResponseDTO } from './auth.dto';
+import {
+  CompleteRegisterResponseDTO,
+  EditUserDetailsDTO,
+  EditAccountDetailsResponseDTO,
+  EditUserBundleAmountDTO,
+  EditUserSubTypeDTO,
+  LoginDTO,
+  LoginResponseDTO,
+  LogoutResponseDTO,
+  RegisterDTO,
+  SearchUserResponseDTO,
+  StartRegisterResponseDTO,
+  VerifyEmailDTO,
+  VerifyEmailResponseDTO,
+} from './auth.dto';
 import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 
 @Controller()
@@ -137,33 +152,39 @@ export class AuthController {
   //   return this.authservice.editUserBundleAmount(userId, frontendBundleName);
   // }
 
-  @Post('auth/editBankDetails')
-  @ApiOkResponse({
-    description:
-      'Account details edition response. Can only be access by logged-in account owner or admin',
-    type: EditAccountDetailsResponseDTO,
-  })
+  @Post('auth/edit_user_details')
   @ApiTags('Auth')
-  editBankDetails(
-    @Body() body: EditAccountDetailsDTO,
+  @UseInterceptors(FileInterceptor('profilePic'))
+  editUserDetails(
+    @UploadedFile() profilePic: File,
+    @Body() body: EditUserDetailsDTO,
     @Req() req: Request,
     @Res() res: Response,
   ) {
-    const {
+    const { userId, first_name, last_name, address, phone_number } = body;
+    return this.authservice.editUserDetails(
       userId,
-      accountBank,
-      accountNumber,
-      accountName,
-      accountBankCode,
-      accountCurrency,
-    } = body;
-    return this.authservice.editBankDetails(
+      first_name,
+      last_name,
+      profilePic,
+      address,
+      phone_number,
+      req,
+      res,
+    );
+  }
+
+  @Post('auth/accept_govt_issued_id_card')
+  @ApiTags('Auth')
+  acceptGovermentIssuedIdCard(
+    @Body() body: EditUserDetailsDTO,
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
+    const { userId, idCard } = body;
+    return this.authservice.acceptGovermentIssuedIdCard(
       userId,
-      accountBank,
-      accountBankCode,
-      accountNumber,
-      accountName,
-      accountCurrency,
+      idCard,
       req,
       res,
     );

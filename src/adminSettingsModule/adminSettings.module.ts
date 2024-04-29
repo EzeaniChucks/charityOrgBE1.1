@@ -8,6 +8,7 @@ import { PaymentModule } from 'src/paymentModule/payment.module';
 import { userSchema } from 'src/authModule/auth.model';
 import { eventSchema } from 'src/eventsModule/events.model';
 import { membershipSchema } from 'src/membership/membership.model';
+import { accountValIntentSchema } from 'src/accountValidationIntent/accountValIntent.model';
 
 @Module({
   imports: [
@@ -18,6 +19,9 @@ import { membershipSchema } from 'src/membership/membership.model';
     MongooseModule.forFeature([{ name: 'events', schema: eventSchema }]),
     MongooseModule.forFeature([
       { name: 'membership', schema: membershipSchema },
+    ]),
+    MongooseModule.forFeature([
+      { name: 'accountValIntent', schema: accountValIntentSchema },
     ]),
     PaymentModule,
   ],

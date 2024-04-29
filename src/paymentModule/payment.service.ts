@@ -675,7 +675,6 @@ export class PaymentService {
     withdrawalIntentId: string,
     response: Response,
   ) {
-    
     try {
       const user = await this.User.findOne({ _id: userId });
       if (!user) {
@@ -694,9 +693,13 @@ export class PaymentService {
             'This payment intent has been cancelled by user and should no longer be processed',
           );
       }
-      
+
       if (withdrawalIntent?.intentStatus !== 'unattended') {
-        return response.status(400).json(`This payment intent already has a status of ${withdrawalIntent?.intentStatus}.`);
+        return response
+          .status(400)
+          .json(
+            `This payment intent already has a status of ${withdrawalIntent?.intentStatus}.`,
+          );
       }
 
       const currency = withdrawalIntent?.currency;
@@ -718,12 +721,12 @@ export class PaymentService {
         'Wallet Withdraw',
         'Bank Transfer',
       );
-      
+
       // const { account_bank, account_number } = user.bankDetails;
       const callback_url = `https://${process.env.BACK_END_CONNECTION}/respond_to_fl_bank_payment`;
-      
+
       const reference = `${user.firstName}_${user.lastName}_${Date.now()}`;
-      
+
       const data = {
         account_bank,
         account_number,
@@ -758,7 +761,7 @@ export class PaymentService {
           transfer_purpose: 'Wallet withdrawal',
         },
       };
-      
+
       const flw = new Flutterwave(
         // 'FLWPUBK_TEST-31f261f02a971b32bd56cf4deff5e74a-X',
         `${process.env.FLUTTERWAVE_V3_PUBLIC_KEY}`,
@@ -1407,6 +1410,9 @@ export class PaymentService {
     userId,
     // country,
     account_number,
+    account_bank,
+    legal_first_name,
+    legal_last_name,
     bvn,
     bank_code,
     res,
@@ -1414,6 +1420,9 @@ export class PaymentService {
     userId: string;
     // country:string,
     account_number: string;
+    account_bank: string;
+    legal_first_name: string;
+    legal_last_name: string;
     bvn: string;
     bank_code: string;
     res: Response;
@@ -1422,15 +1431,23 @@ export class PaymentService {
       // const user = await this.User.findOne({ _id: '65c681387a7de5645968486f' });
       const user = await this.User.findOneAndUpdate(
         { _id: userId },
-        { $set: { accountTempInfo: { account_number, bvn } } },
+        {
+          $set: {
+            accountTempInfo: {
+              account_number,
+              bvn,
+              account_bank,
+              legal_first_name,
+              legal_last_name,
+            },
+          },
+        },
       );
       if (!user) {
-        return res
-          .status(400)
-          .json({
-            msg: 'unauthorized access',
-            payload: 'You do not have access to this route',
-          });
+        return res.status(400).json({
+          msg: 'unauthorized access',
+          payload: 'You do not have access to this route',
+        });
       }
 
       if (!user?.paystack_customer_code) {
@@ -1449,10 +1466,11 @@ export class PaymentService {
         bvn,
         bank_code,
         // first_name: 'Uchenna',
-        first_name: user?.firstName,
+        first_name: legal_first_name,
         // last_name: 'Okoro',
-        last_name: user?.lastName,
+        last_name: legal_last_name,
       };
+
       // console.log(body);
       const options = {
         method: 'POST',
@@ -1475,12 +1493,17 @@ export class PaymentService {
         // console.log(response.body);
         const result = response.body;
         if (result.status === false) {
-          return res.status(400).json({ msg: result?.message });
+          return res
+            .status(400)
+            .json({
+              msg: result?.message,
+              payload: `${result?.message} ${result?.meta?.nextStep}`,
+            });
         }
         return res.status(200).json({
           msg: 'successful',
           payload:
-            'Your bank validation is underway. Check your in-app notification for the status',
+            'Your bank validation is underway. Check your in-app notification for the status in few minutes',
         });
       });
     } catch (err) {
@@ -1489,7 +1512,7 @@ export class PaymentService {
   }
 
   async paystackBVNValidationWebhookResponse(body: any, res: Response) {
-    // console.log('paystack webook response',body);
+    // console.log('paystack webook response', body);
     try {
       const { event, data } = body;
 
@@ -1501,8 +1524,11 @@ export class PaymentService {
           {
             $inc: { accountBankVerificationAttempts: 1 },
             $set: {
+              firstName: user?.accountTempInfo?.legal_first_name,
+              lastName: user?.accountTempInfo?.legal_last_name,
               accountBankCode: identification?.bank_code,
               accountNumber: user?.accountTempInfo?.account_number,
+              accountBank: user?.accountTempInfo?.account_bank,
               bvn: user?.accountTempInfo?.bvn,
               accountBankVerified: true,
             },
@@ -1511,7 +1537,7 @@ export class PaymentService {
         );
 
         await this.notificationservice.logSingleNotification(
-          'Your bank account information is now verified',
+          'Your bank account information is verified. Click to view verification status on your profile page',
           updateduser._id,
           '65c681387a7de5645968486f',
           `${process.env.FRONT_END_CONNECTION}/user/${updateduser._id}`,

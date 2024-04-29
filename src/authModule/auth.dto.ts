@@ -71,10 +71,10 @@ export class CompleteRegisterResponseDTO {
   payload: {
     _id: string;
     email: string;
-    firstName:string;
-    lastName:string;
-    phoneNumber:string;
-    isVerified:string;
+    firstName: string;
+    lastName: string;
+    phoneNumber: string;
+    isVerified: string;
   };
 }
 
@@ -156,19 +156,21 @@ export class CompleteUserDetailsResponseDTO {
   };
 }
 
-export class EditAccountDetailsDTO {
+export class EditUserDetailsDTO {
   @ApiProperty({ example: 'userGeneratedId' })
   userId: string;
-  @ApiProperty({ example: 'Guarantee Trust Bank' })
-  accountBank: string;
-  @ApiProperty({ example: '89859998594' })
-  accountNumber: string;
-  @ApiProperty({ example: 'John Doe' })
-  accountName: string;
-  @ApiProperty({ example: '058' })
-  accountBankCode: string;
-  @ApiProperty({ example: 'NGN' })
-  accountCurrency: string;
+  @ApiProperty({ example: 'John' })
+  first_name?: string;
+  @ApiProperty({ example: 'Doe' })
+  last_name?: string;
+  @ApiProperty({ example: '+2340900098980' })
+  phone_number?: string;
+  @ApiProperty({ example: 'an img file' })
+  profilePic?: Express.Multer.File;
+  @ApiProperty({ example: 'an img file' })
+  idCard?: Express.Multer.File;
+  @ApiProperty({ example: 'user address' })
+  address?: string;
 }
 
 export class EditUserSubTypeDTO {

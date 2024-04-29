@@ -22,6 +22,15 @@ export class AdminSettingsController {
     return this.adminsettingsservice.confirmAdminStatus(req);
   }
 
+  @Post('admin/create_new_paystack_customer')
+  @ApiTags('Admin')
+  async createNewPaystackCustomer(
+    @Body('userId') userId: string,
+    @Res() res: Response,
+  ) {
+    return this.adminsettingsservice.createNewPaystackCustomer(userId, res);
+  }
+
   @Get('fetchUserDetailsForAdminManagement')
   @ApiOkResponse({
     description:
@@ -94,7 +103,6 @@ export class AdminSettingsController {
       'Subscriptions object containing different price tiers (e.g Free, Gold, Platinum )and features users can access under each tier',
     type: setSubscriptionResponseDTO,
   })
-  
   @ApiTags('Admin')
   async setSubscription(@Body() body: setSubscriptionDTO, @Req() req: Request) {
     const { userId, subObj } = body;
@@ -107,7 +115,6 @@ export class AdminSettingsController {
     description:
       'Returns all bundle names with their price and quantities, as set by admin',
   })
-
   @ApiTags('Admin')
   async setBundles(@Body() body: setBundleDTO, @Req() req: Request) {
     const { userId, bundleObj } = body;

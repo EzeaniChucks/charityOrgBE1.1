@@ -12,8 +12,10 @@ import * as cryptos from 'crypto';
 import { Model } from 'mongoose';
 import { PaymentController } from 'src/paymentModule/payment.controller';
 import { PaymentService } from 'src/paymentModule/payment.service';
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import { chargeRangeDeletionDTO } from './adminSettings.dto';
+import { sendEmail } from 'src/util';
+import * as request from 'request';
 
 @Injectable()
 export class AdminSettingsService {
@@ -22,6 +24,7 @@ export class AdminSettingsService {
     @InjectModel('CharityAppUsers') private user: Model<any>,
     @InjectModel('events') private event: Model<any>,
     @InjectModel('membership') private membership: Model<any>,
+    @InjectModel('accountValIntent') private accountValIntent: Model<any>,
     private paymentservice: PaymentService,
   ) {}
 
@@ -38,6 +41,79 @@ export class AdminSettingsService {
     }
   }
 
+  //for users who somehow didn't get to be registered on paystack during onboarding process to this app
+  async createNewPaystackCustomer(userId: string, res: Response) {
+    try {
+      const user = await this.user.findOne({ _id: userId });
+      if (!user) {
+        return res.status(400).json({
+          msg: 'User does not exist. Confirm the validity of the userId or ask user to re-register',
+        });
+      }
+
+      if (user?.paystack_customer_code) {
+        return res.status(400).json({
+          msg: `${user.firstName} ${user.lastName} already has a customer code of ${user?.paystack_customer_code}`,
+        });
+      }
+
+      const url = `https://api.paystack.co/customer`;
+      const options = {
+        method: 'POST',
+        url,
+        headers: {
+          Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+          'content-type': 'application/json',
+          'cache-control': 'no-cache',
+        },
+        body: {
+          email: user.email,
+          first_name: user?.firstName,
+          last_name: user?.lastName,
+          phone: user?.phoneNumber,
+        },
+        json: true,
+      };
+
+      request(options, async (error: any, response: any) => {
+        if (error) {
+          return res.status(400).json({
+            msg: `Something went wrong with Paystack's API`,
+            payload: error,
+          });
+        }
+        const result = response.body;
+
+        if (result.status === 'error') {
+          return res.status(400).json({
+            msg: 'error status',
+            payload: result,
+          });
+        }
+        try{
+          user.paystack_customer_code = result?.data?.customer_code;
+          user.paystack_customer_id = result?.data?.id;
+          user.paystack_customer_integration = result?.data?.integration;
+          if(!user?.country){
+            user.country = 'nigeria';
+          }
+          await user.save();
+          return res
+            .status(200)
+            .json({ msg: 'successful', payload: 'paystack customer created' });
+        }catch(err){
+          return res
+            ?.status(500)
+            ?.json({ payload: 'server error', msg: err?.message });   
+        }
+      });
+    } catch (err: any) {
+      return res
+        ?.status(500)
+        ?.json({ payload: 'server error', msg: err?.message });
+    }
+  }
+
   async fetchUserDetailsForAdminManagement(req: any, res: Response) {
     try {
       if (req?.decodedAdmin?.isAdmin === false) {
@@ -51,18 +127,18 @@ export class AdminSettingsService {
         const charities = await this.event
           .find({ creatorId: eachUser._id })
           .select(
-            '_id eventName currency totalEventAmount eventAmountExpected'
+            '_id eventName currency totalEventAmount eventAmountExpected',
           );
         const memberships = await this.membership
           .find({ creatorId: eachUser?._id })
           .select('_id title members');
 
         finalUserArray?.push({
-          _id:eachUser._id,
+          _id: eachUser._id,
           name: `${eachUser?.firstName} ${eachUser?.lastName}`,
           charities,
           memberships,
-          status:eachUser?.userStatus,
+          status: eachUser?.userStatus,
           isVerifiedAsOrganization: eachUser?.is_offically_verified || false,
           verification_documents: {
             govt_issued_id: eachUser?.official_verification_id,
@@ -80,6 +156,114 @@ export class AdminSettingsService {
         .json({ msg: 'unsuccessful. Server error', payload: err.message });
     }
   }
+
+  async fetchVerificationIntents(req: Request, res: Response) {
+    try {
+      const { status } = req.query;
+      let intents;
+
+      if (status === 'attended') {
+        intents = await this.accountValIntent.find({
+          intentStatus: 'attended',
+        });
+      }
+      if (status === 'unattended') {
+        intents = await this.accountValIntent.find({
+          intentStatus: 'unattended',
+        });
+      }
+      if (status === 'all') {
+        intents = await this.accountValIntent.find({
+          intentStatus: 'unattended',
+        });
+      }
+
+      return res.status(200).json({ msg: 'successful', payload: intents });
+    } catch (err: any) {
+      return res.status(500).json({ msg: err?.message });
+    }
+  }
+
+  async giveVerificationVerdict(
+    verdict: string,
+    userId: string,
+    dissatisfaction_reason: string,
+    res: Response,
+  ) {
+    try {
+      if (verdict !== 'satisfied' && verdict !== 'dissatisfied') {
+        return res.status(400).json({
+          msg: `Verdict values can only be 'satisfied' or 'dissatified'`,
+        });
+      }
+
+      if (verdict === 'satisfied') {
+        const user = await this.user.findOneAndUpdate(
+          { _id: userId },
+          { is_offically_verified: true },
+          { new: true },
+        );
+
+        await this.accountValIntent.findOneAndUpdate(
+          { userId },
+          { $set: { intentStatus: 'attended', verdict: 'satisfied' } },
+        );
+
+        await sendEmail(
+          user,
+          `
+          <div>
+            <h4>Congrats! Your account is verified</h4>
+            <h5>${user?.firstName} ${user?.lastName}, your account is verified</h5>
+            <h5>You can now make unlimited deposits to your wallets, donations to charities and withdrawals from our platform</h5>
+            <button><a style='padding:5px; border-radius:10px;' href='${process.env.FRONT_END_CONNECTION}/user/${user?._id}'>Go to your profile</a></button>
+            </div>
+        `,
+        );
+        return res.status(200).json({
+          msg: 'successful',
+          payload: 'User account successfully verified',
+        });
+      }
+
+      if (verdict === 'dissatisfied') {
+        if (!dissatisfaction_reason) {
+          return res
+            .status(400)
+            .json({ msg: 'Please provide a reason for being dissatified' });
+        }
+        const user = await this.user.findOne({ _id: userId });
+
+        await this.accountValIntent.findOneAndUpdate(
+          { userId },
+          {
+            $set: {
+              intentStatus: 'attended',
+              verdict: 'dissatisfied',
+              dissatisfaction_reason,
+            },
+          },
+        );
+
+        await sendEmail(
+          user,
+          `
+          <div>
+          <h4>Your verification intent needs attention</h4>
+          <h5>${user?.firstName} ${user?.lastName}, your account didn't pass verification yet</h5>
+          <h5>Reason: ${dissatisfaction_reason}</h5>
+          <h5>Please make neccessary adjustments and try re-verifying from your profile page</h5>
+            <button><a style='padding:5px; border-radius:10px;' href='${process.env.FRONT_END_CONNECTION}/user/${user?._id}'>Go to your profile</a></button>
+            </div>
+        `,
+        );
+      }
+    } catch (err: any) {
+      return res.status(500).json({ msg: err?.message });
+    }
+  }
+
+  async fetchWithdrawalIntents() {}
 
   async walletChargeHandler(
     completeBody: {

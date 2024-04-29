@@ -8,14 +8,12 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
-import * as nodemailer from 'nodemailer';
 import { InjectModel } from '@nestjs/mongoose';
 import * as cryptos from 'crypto';
 import mongoose, { Model } from 'mongoose';
-import { PaymentController } from 'src/paymentModule/payment.controller';
 import { PaymentService } from 'src/paymentModule/payment.service';
 import { AdminSettingsService } from 'src/adminSettingsModule/adminSettings.service';
-import { Request, Response, response } from 'express';
+import { Request, Response } from 'express';
 import { attachCookiesToResponse, jwtIsValid, sendEmail } from 'src/util';
 import { CloudinaryService } from 'src/cloudinary/cloudinary.services';
 import * as request from 'request';
@@ -27,6 +25,7 @@ export class AuthService {
     @InjectModel('CharityAppUsers') private User: Model<any>,
     @InjectModel('wallet') private wallet: Model<any>,
     @InjectModel('adminsettings') private admin: Model<any>,
+    @InjectModel('accountValIntent') private accountValIntent: Model<any>,
     @Inject(forwardRef(() => PaymentService))
     private paymentservice: PaymentService,
     private adminservice: AdminSettingsService,
@@ -108,6 +107,7 @@ export class AuthService {
             {
               _id,
               email,
+              isAdmin,
             },
             process.env.JWT_SECRET,
             {
@@ -275,11 +275,12 @@ export class AuthService {
         { _id: userId },
         { $set: { verificationToken } },
       );
-      const { _id, email } = user;
+      const { _id, email, isAdmin } = user;
       const token = await jwt.sign(
         {
           _id,
           email,
+          isAdmin,
         },
         process.env.JWT_SECRET,
         {
@@ -295,7 +296,7 @@ export class AuthService {
             <h5>Click on the button below to verify your email address</h5>
             <button><a style='padding:5px; border-radius:10px;' href='${process.env.FRONT_END_CONNECTION}/verify?verificationToken=${verificationToken}&email=${user?.email}'>Verify Email</a></button>
             </div>
-        `
+        `,
       ).then(
         (response) => {
           return res.status(200).json({
@@ -475,8 +476,12 @@ export class AuthService {
         lastName,
         phoneNumber,
         _id,
+        profilePic,
         isVerified,
         isAdmin,
+        address,
+        is_offically_verified,
+        accountBankVerified,
         subscription,
         bundle,
       } = user;
@@ -492,6 +497,10 @@ export class AuthService {
             phoneNumber,
             isVerified,
             isAdmin,
+            address,
+            profilePic,
+            // is_offically_verified,
+            // accountBankVerified,
           },
         });
       }
@@ -504,11 +513,15 @@ export class AuthService {
           firstName,
           lastName,
           phoneNumber,
+          address,
+          profilePic,
           accountBank: user.accountBank,
           accountNumber: user.accountNumber,
           accountName: user.accountName,
           accountBankCode: user.accountBankCode,
           accountCurrency: user.accountCurrency,
+          is_offically_verified,
+          accountBankVerified,
           isVerified,
           isAdmin,
           subscription,
@@ -762,385 +775,67 @@ export class AuthService {
     return eligibilityResult;
   }
 
-  // async editUserSubscriptiontype({
-  //   subType,
-  //   userId,
-  // }: {
-  //   subType: string;
-  //   userId: string;
-  // }) {
-  //   try {
-  //     const user = await this.User.findOne({ _id: userId });
-  //     if (!user) {
-  //       throw new ForbiddenException(
-  //         'Forbidden request. This user does not exist',
-  //       );
-  //     }
-  //     const {
-  //       email,
-  //       firstName,
-  //       lastName,
-  //       phoneNumber,
-  //       _id,
-  //       isVerified,
-  //       isAdmin,
-  //       cardNumber,
-  //       subscription,
-  //       bundle,
-  //       expirationDate,
-  //       cvv,
-  //       accountBank,
-  //       accountNumber,
-  //     } = user;
-  //     const userData = {
-  //       _id,
-  //       email: email,
-  //       firstName,
-  //       lastName,
-  //       phoneNumber,
-  //       cardNumber,
-  //       expirationDate,
-  //       cvv,
-  //       accountBank,
-  //       accountNumber,
-  //       isVerified,
-  //       isAdmin,
-  //       subscription,
-  //       // bundles,
-  //       bundle,
-  //     };
-
-  //     const sub_and_bundle =
-  //       await this.adminservice.fetchSubscriptionAndBundles();
-
-  //     if (subType === user.subscription.subscription_type) {
-  //       return {
-  //         msg: 'success',
-  //         user: userData,
-  //       };
-  //     }
-  //     if (
-  //       subType === 'free' &&
-  //       user?.subscription?.subscription_type !== 'free'
-  //     ) {
-  //       const maxUsers =
-  //         sub_and_bundle?.subscription?.free?.free_participant_no;
-  //       user.subscription.subscription_type = 'free';
-  //       user.subscription.subscription_date = new Date();
-  //       user.event_max_allowed_participants = maxUsers;
-  //       await user.save();
-  //     }
-  //     if (
-  //       subType === 'gold' &&
-  //       user.subscription.subscription_type === 'platinum'
-  //     ) {
-  //       const maxUsers =
-  //         sub_and_bundle?.subscription?.gold?.gold_participant_no;
-  //       user.subscription.subscription_type = 'gold';
-  //       user.subscription.subscription_date = new Date();
-  //       user.event_max_allowed_participants = maxUsers;
-  //       await user.save();
-  //     }
-  //     if (
-  //       subType === 'gold' &&
-  //       user.subscription.subscription_type === 'free'
-  //     ) {
-  //       const amount = sub_and_bundle?.subscription?.goldprice?.value;
-  //       const currency = sub_and_bundle?.subscription?.goldprice?.currency;
-  //       const maxUsers =
-  //         sub_and_bundle?.subscription?.gold?.gold_participant_no;
-  //       await this.implementWalletWithdrawal(
-  //         user,
-  //         userId,
-  //         amount,
-  //         currency,
-  //         subType,
-  //       );
-  //       user.subscription.subscription_type = 'gold';
-  //       user.subscription.subscription_date = new Date();
-  //       user.event_max_allowed_participants = maxUsers;
-  //       await user.save();
-  //     }
-  //     if (
-  //       subType === 'platinum' &&
-  //       (user.subscription.subscription_type === 'gold' ||
-  //         user.subscription.subscription_type === 'free')
-  //     ) {
-  //       const amount = sub_and_bundle?.subscription?.platinumprice?.value;
-  //       const currency = sub_and_bundle?.subscription?.platinumprice?.currency;
-  //       const maxUsers =
-  //         sub_and_bundle?.subscription?.platinum?.platinum_participant_no;
-  //       await this.implementWalletWithdrawal(
-  //         user,
-  //         userId,
-  //         amount,
-  //         currency,
-  //         subType,
-  //       );
-  //       user.subscription.subscription_type = 'platinum';
-  //       user.subscription.subscription_date = new Date();
-  //       user.event_max_allowed_participants = maxUsers;
-  //       await user.save();
-  //     }
-  //     return {
-  //       msg: 'success',
-  //       user: userData,
-  //     };
-  //   } catch (err) {
-  //     throw new InternalServerErrorException({ msg: err.message });
-  //   }
-  // }
-
-  // async editUserBundleAmount(userId: string, frontendBundleName: string) {
-  //   try {
-  //     let user = await this.User.findOne({ _id: userId });
-  //     if (!user) {
-  //       throw new ForbiddenException(
-  //         'Forbidden request. This user does not exist',
-  //       );
-  //     }
-
-  //     //check if user has previously purchased specified bundle
-  //     const bundleHasOnceBeenPurchased = await this.User.findOne({
-  //       _id: userId,
-  //       bundle: { $elemMatch: { bundleName: frontendBundleName } },
-  //     });
-  //     const adminObject = await this.admin.findOne({
-  //       _id: '6466adefaaed2bfa0761592b',
-  //     });
-
-  //     let bundleNamesArray = [];
-  //     //extract bundleNames into an array (for later use)
-  //     adminObject?.bundle_settings.map((eachBundle: any) => {
-  //       bundleNamesArray.push(eachBundle.bundleName);
-  //       return;
-  //     });
-
-  //     let particularBundleFromAdmin = (bundleN: string) => {
-  //       return adminObject?.bundle_settings.find((eachBundle: any) => {
-  //         return eachBundle.bundleName === bundleN;
-  //       });
-  //     };
-  //     if (bundleHasOnceBeenPurchased) {
-  //       //user purchases bundle
-  //       function buildUserBundle(bundleName: string) {
-  //         this.buildup = function () {
-  //           const userBundle = user?.bundle.find((eachBundle: any) => {
-  //             return eachBundle.bundleName === bundleName;
-  //           });
-  //           const adminFeatureObj = particularBundleFromAdmin(bundleName);
-
-  //           let fieldMatch = [];
-  //           let aggregate = [];
-
-  //           particularBundleFromAdmin(bundleName).bundleFeatures.map(
-  //             (adminFeature: any) => {
-  //               let result = userBundle.bundleFeatures.find(
-  //                 (userFeature: any) => {
-  //                   return adminFeature.featureName === userFeature.featureName;
-  //                 },
-  //               );
-  //               if (result) {
-  //                 const newObj = {
-  //                   featureName: adminFeature.featureName,
-  //                   stockLeft:
-  //                     Number(adminFeature.featureStock) +
-  //                     Number(result.stockLeft),
-  //                 };
-  //                 fieldMatch.push(newObj);
-  //                 return;
-  //               }
-  //             },
-  //           );
-  //           // compare fieldMatch with the rest of userBundle features
-  //           if (fieldMatch.length === 0) {
-  //             //then no feature in adminsettins is present in user module
-  //             const reburbishedAdmin = adminFeatureObj.bundleFeatures.map(
-  //               (eachFeature: any) => {
-  //                 return {
-  //                   featureName: eachFeature.featureName,
-  //                   stockLeft: eachFeature.featureStock,
-  //                 };
-  //               },
-  //             );
-  //             aggregate = [...userBundle.bundleFeatures, ...reburbishedAdmin];
-  //           } else {
-  //             // console.log(`fieldMatch: ${fieldMatch}`)
-  //             let featureNameList = fieldMatch.map((eachFeature: any) => {
-  //               return eachFeature.featureName;
-  //             });
-  //             let userFeatureCheck = [];
-
-  //             userBundle?.bundleFeatures.map((eachFeature: any) => {
-  //               if (featureNameList.includes(eachFeature?.featureName)) {
-  //                 let concernedFieldObj = fieldMatch.find((eachF: any) => {
-  //                   return eachF?.featureName === eachFeature?.featureName;
-  //                 });
-  //                 userFeatureCheck.push(concernedFieldObj);
-  //               } else {
-  //                 userFeatureCheck.push(eachFeature);
-  //               }
-  //               return;
-  //             });
-  //             let adminFeatureCheck = [];
-  //             let compiledUserFeatureNameList = userFeatureCheck.map(
-  //               (eachFeature: any) => {
-  //                 return eachFeature.featureName;
-  //               },
-  //             );
-  //             adminFeatureObj?.bundleFeatures.map((eachFeature: any) => {
-  //               if (
-  //                 !compiledUserFeatureNameList.includes(
-  //                   eachFeature?.featureName,
-  //                 )
-  //               ) {
-  //                 let temp = eachFeature.featureStock;
-  //                 delete eachFeature.featureStock;
-  //                 eachFeature.stockLeft = temp;
-  //                 adminFeatureCheck.push(eachFeature);
-  //               }
-  //               aggregate = [...userFeatureCheck, ...adminFeatureCheck];
-  //               return;
-  //             });
-  //           }
-  //           return aggregate;
-  //         };
-  //       }
-  //       const newFeatures = new buildUserBundle(frontendBundleName).buildup();
-  //       // console.log(newFeatures);
-  //       user = await this.User.findOneAndUpdate(
-  //         { _id: userId, 'bundle.bundleName': frontendBundleName },
-  //         { $set: { 'bundle.$.bundleFeatures': newFeatures } },
-  //       );
-  //     } else {
-  //       const adminBundle = particularBundleFromAdmin(frontendBundleName);
-  //       if (!adminBundle) {
-  //         throw new BadRequestException(
-  //           'This bundle package does not exist. Please contact customer care with error message',
-  //         );
-  //       }
-  //       const refurbishedAdminBundle = adminBundle.bundleFeatures.map(
-  //         (eachBundle: any) => {
-  //           return {
-  //             featureName: eachBundle?.featureName,
-  //             stockLeft: eachBundle?.featureStock,
-  //           };
-  //         },
-  //         { new: true },
-  //       );
-  //       // console.log(refurbishedAdminBundle);
-  //       user = await this.User.findOneAndUpdate(
-  //         { _id: userId },
-  //         {
-  //           $push: {
-  //             bundle: {
-  //               bundleName: frontendBundleName,
-  //               bundleFeatures: refurbishedAdminBundle,
-  //             },
-  //           },
-  //         },
-  //         { new: true },
-  //       );
-  //     }
-
-  //     // user.bundles[bundle_type_variable] += Number(bundle_quantity_to_buy);
-  //     // await user.save();
-
-  //     //prepare data for wallet withdrawal
-
-  //     let bundleValue = Number(
-  //       particularBundleFromAdmin(frontendBundleName).bundlePrice,
-  //     );
-  //     let bundleCurrency =
-  //       particularBundleFromAdmin(frontendBundleName).bundleCurrency;
-
-  //     let _ = undefined;
-  //     let bundle_name = frontendBundleName;
-  //     await this.implementWalletWithdrawal(
-  //       user,
-  //       userId,
-  //       bundleValue,
-  //       bundleCurrency,
-  //       _,
-  //       bundle_name,
-  //     );
-
-  //     const {
-  //       email,
-  //       firstName,
-  //       lastName,
-  //       phoneNumber,
-  //       _id,
-  //       isVerified,
-  //       isAdmin,
-  //       cardNumber,
-  //       subscription,
-  //       bundles,
-  //       bundle,
-  //       expirationDate,
-  //       cvv,
-  //       accountBank,
-  //       accountNumber,
-  //     } = user;
-  //     const userData = {
-  //       _id,
-  //       email: email,
-  //       firstName,
-  //       lastName,
-  //       phoneNumber,
-  //       cardNumber,
-  //       expirationDate,
-  //       cvv,
-  //       accountBank,
-  //       accountNumber,
-  //       isVerified,
-  //       isAdmin,
-  //       subscription,
-  //       bundles,
-  //       bundle,
-  //     };
-  //     return {
-  //       msg: 'success',
-  //       user: userData,
-  //     };
-  //   } catch (err) {
-  //     throw new InternalServerErrorException({ msg: err.message });
-  //   }
-  // }
-
-  async editBankDetails(
+  async editUserDetails(
     userId: string,
-    accountBank: string,
-    accountBankCode: string,
-    accountNumber: string,
-    accountName: string,
-    accountCurrency: string,
+    first_name: string,
+    last_name: string,
+    // profilePic: Express.Multer.File,
+    profilePic: any,
+    address: string,
+    phone_number: string,
     req: Request,
     res: Response,
   ) {
     // console.log(userId, accountBank, accountNumber, accountName)
     try {
-      const token = req?.headers.authorization?.split(' ')[1];
+      const token = req?.headers?.authorization?.split(' ')[1];
 
       // let decodedU;
       let decodedUser = await jwtIsValid(token);
       // console.log(decodedUser)
-      if (decodedUser._id.toString() !== userId && !decodedUser.isAdmin) {
+      const userExists = await this.User.findOne({ _id: userId });
+
+      if (!userExists) {
         return res.status(400).json({
           msg: 'unsuccessful',
-          payload: 'You do not have access to this route',
+          payload:
+            'Unauthorized. User does not exist. Try registering on our welcome page',
         });
       }
 
+      if (decodedUser?._id.toString() !== userId && !userExists?.isAdmin) {
+        return res.status(400).json({
+          msg: 'unsuccessful',
+          payload: 'Unauthorized access',
+        });
+      }
+
+      const infoObject = {};
+      if (
+        (first_name || last_name) &&
+        !userExists?.is_offically_verified &&
+        !userExists?.accountBankVerified
+      ) {
+        infoObject['firstName'] = first_name || '';
+        infoObject['lastName'] = last_name || '';
+      }
+
+      if (address) {
+        infoObject['address'] = address;
+      }
+      if (phone_number) {
+        infoObject['phoneNumber'] = phone_number;
+      }
+      if (profilePic) {
+        const result = await this.cloudinary.uploadImage(profilePic?.buffer);
+        infoObject['profilePic'] = result?.secure_url;
+      }
+      // console.log(infoObject);
       const user = await this.User.findOneAndUpdate(
         { _id: userId },
         {
           $set: {
-            accountBank,
-            accountNumber,
-            accountName,
-            accountBankCode,
-            accountCurrency,
+            ...infoObject,
           },
         },
         { new: true },
@@ -1149,24 +844,35 @@ export class AuthService {
         return res
           .status(400)
           .json(
-            'Forbidden request. Could not save your bank details. Contact customer support',
+            'Forbidden request. Could not edit user details. Try again or contact customer support',
           );
       }
+
       const {
+        _id,
         email,
         firstName,
         lastName,
         phoneNumber,
-        _id,
-        isVerified,
+        profilePic:profilePicture,
+        address: useraddress,
+        is_offically_verified,
+        accountBankVerified,
         isAdmin,
-        cardNumber,
         subscription,
-        bundles,
         bundle,
-        expirationDate,
-        cvv,
       } = user;
+
+      const extraObjects = {};
+
+      if (is_offically_verified) {
+        extraObjects['accountBank'] = user?.accountBank;
+        extraObjects['accountNumber'] = user?.accountNumber;
+        extraObjects['accountName'] = user?.accountName;
+        extraObjects['accountBankCode'] = user?.accountBankCode;
+        extraObjects['accountCurrency'] = user?.accountCurrency;
+      }
+
       return res.status(200).json({
         msg: 'success',
         user: {
@@ -1174,24 +880,130 @@ export class AuthService {
           email: email,
           firstName,
           lastName,
+          profilePic:profilePicture,
           phoneNumber,
-          cardNumber,
-          expirationDate,
-          cvv,
-          accountBank: user.accountBank,
-          accountNumber: user.accountNumber,
-          accountName: user.accountName,
-          accountBankCode: user.accountBankCode,
-          accountCurrency: user.accountCurrency,
-          isVerified,
+          address: useraddress,
+          ...extraObjects,
+          accountBankVerified,
+          is_offically_verified,
           isAdmin,
           subscription,
-          bundles,
           bundle,
         },
       });
     } catch (err) {
-      return res.status(500).json({ msg: err.message });
+      return res.status(500).json({ msg: err?.message });
+    }
+  }
+
+  //only happens after a user's account is verified by paystack, if they are nigerians
+  //a verification intent is sent to admin thereafter
+  async acceptGovermentIssuedIdCard(
+    userId: string,
+    idCard: Express.Multer.File,
+    req: Request,
+    res: Response,
+  ) {
+    try {
+      const token = req?.headers?.authorization?.split(' ')[1];
+
+      let decodedUser = await jwtIsValid(token);
+      // console.log(decodedUser)
+      const userExists = await this.User.findOne({ _id: userId });
+
+      if (!userExists) {
+        return res.status(400).json({
+          msg: 'unsuccessful',
+          payload:
+            'Unauthorized. User does not exist. Try registering on our welcome page',
+        });
+      }
+
+      if (decodedUser?._id.toString() !== userId && !userExists?.isAdmin) {
+        return res.status(400).json({
+          msg: 'unsuccessful',
+          payload: 'Unauthorized access',
+        });
+      }
+
+      if (
+        userExists?.country === 'nigeria' &&
+        !userExists?.accountBankVerified
+      ) {
+        return res.status(400).json({
+          msg: 'unsuccessful',
+          payload:
+            'Please verify your bank account information before submitting verification document',
+        });
+      }
+
+      if (idCard) {
+        const admin = await this.User.findOne({ _id: process?.env?.ADMIN_ID });
+
+        const result = await this.cloudinary.uploadImage(idCard?.buffer);
+
+        if (!result?.secure_url) {
+          return res
+            .status(400)
+            .json(
+              'Verification document could not be saved. Please refresh page and resumbit, or contact customer support',
+            );
+        }
+
+        const user = await this.User.findOneAndUpdate(
+          { _id: userId },
+          {
+            $set: {
+              official_verification_id: result?.secure_url,
+            },
+          },
+          { new: true },
+        );
+
+        if (!user) {
+          return res
+            .status(400)
+            .json(
+              'Verification document could not be saved. Please try again or contact customer support',
+            );
+        }
+
+        const valIntent = await this.accountValIntent.create({
+          userId,
+          userName: `${user?.firstName} ${user?.lastName}`,
+          govt_issued_id_doc: result?.secure_url,
+          accountBankCode: user?.accountBankcode,
+          accountBankName: user?.accountBank,
+          accountNumber: user?.accountNumber,
+          accountName: user?.accountName,
+        });
+
+        if (!valIntent) {
+          return res
+            .status(400)
+            .json(
+              'Validation intent could not be created. Please try again or contact customer support',
+            );
+        }
+        await sendEmail(
+          admin,
+          `
+          <div>
+            <h4>New Verification Intent</h4>
+            <h5>A user ${user?.firstName} ${user?.lastName} wants to be verified</h5>
+            <button><a style='padding:5px; border-radius:10px;' href='${process.env.FRONT_END_CONNECTION}/adminDashboard/${admin._id}/manage_account_verification'>View Validation Intent</a></button>
+            </div>
+        `,
+        );
+
+        return res.status(200).json({
+          msg: 'success',
+          payload:
+            'Verification intent has been created. Approval status will communicated to you within the next hour',
+        });
+      }
+    } catch (err) {
+      return res.status(500).json({ msg: err?.message });
     }
   }
 
@@ -1323,6 +1135,7 @@ export class AuthService {
       throw new InternalServerErrorException({ msg: err.message });
     }
   }
+
   async editUserBundleAmount(userId: string, frontendBundleName: string) {
     try {
       let user = await this.User.findOne({ _id: userId });

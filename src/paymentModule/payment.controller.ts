@@ -324,11 +324,22 @@ export class PaymentController {
     @Body() body: PayStackBVNIdentityValidationDTO,
     @Res() res: Response,
   ) {
-    const { userId, account_number, bvn, bank_code } = body;
+    const {
+      userId,
+      account_number,
+      account_bank,
+      legal_first_name,
+      legal_last_name,
+      bvn,
+      bank_code,
+    } = body;
     return await this.paymentservice.payStackBVNIdentityValidation({
       userId,
       // country,
       account_number,
+      account_bank,
+      legal_first_name,
+      legal_last_name,
       bvn,
       bank_code,
       res,

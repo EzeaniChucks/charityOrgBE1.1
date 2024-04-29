@@ -71,7 +71,7 @@ export class NotifService {
   async logSingleNotification(
     message: string,
     recipientId: string,
-    senderId:string,
+    senderId: string,
     link: string,
     type: string,
     // frontEndObjectId: string,
@@ -100,11 +100,13 @@ export class NotifService {
 
   async getNotifications(userId: string) {
     try {
-      const notifs = await this.notifications.find({ recipientId: userId });
+      const notifs = await this.notifications
+        .find({ recipientId: userId })
+        .select('-createdAt');
       if (notifs?.length === 0 || !notifs) {
         return { msg: 'success', payload: [] };
       }
-      return { msg: 'success', payload:notifs };
+      return { msg: 'success', payload: notifs };
     } catch (err) {
       throw new InternalServerErrorException({ msg: err.message });
     }
@@ -122,7 +124,7 @@ export class NotifService {
       await notif.save();
 
       const notifs = await this.notifications.find({ recipientId: userId });
-      return { msg: 'success', payload:notifs };
+      return { msg: 'success', payload: notifs };
     } catch (err) {
       throw new InternalServerErrorException({ msg: err.message });
     }

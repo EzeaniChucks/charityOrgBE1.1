@@ -35,6 +35,7 @@ import { VirtualCardsChecker } from './middleware/virtualCards.middleware';
 import { VirtualCardController } from './virtualCardModule/virtualCard.controller';
 import { WithdrawIntentModule } from './withdrawalIntent/withdrawalIntent.module';
 import { CreeateVCIntentModule } from './createVirtualCardIntent/creeateVCIntent.module';
+import { AccountValIntentModule } from './accountValidationIntent/accountValIntent.module';
 
 @Module({
   imports: [
@@ -56,6 +57,7 @@ import { CreeateVCIntentModule } from './createVirtualCardIntent/creeateVCIntent
     VirtualCardModule,
     WithdrawIntentModule,
     CreeateVCIntentModule,
+    AccountValIntentModule,
   ],
   controllers: [AppController],
   providers: [AppService],

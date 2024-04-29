@@ -109,7 +109,7 @@ export class WithdrawIntentService {
   }) {
     try {
       const admin = await this.user.findOne({
-        _id: '655231c77bd194ba99e67827',
+        _id: process.env.ADMIN_ID,
       });
 
       const userIsverified = await this.user.findOne({ _id: userId });

@@ -119,6 +119,19 @@ export class PayStackBVNIdentityValidationDTO {
   })
   account_number: string;
 
+  account_bank: string;
+  @ApiProperty({
+    example: 'Guarantee Trust Bank',
+    description: `Name of bank`,
+  })
+  legal_first_name: string;
+  @ApiProperty({
+    example: 'John',
+  })
+  legal_last_name: string;
+  @ApiProperty({
+    example: 'Doe',
+  })
   @ApiProperty({
     example: '97700979869',
     description: `Eleven-digit bank verification number`,

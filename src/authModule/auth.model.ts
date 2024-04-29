@@ -16,6 +16,11 @@ export const userSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  country: {
+    type: String,
+    required: true,
+  },
+  address: { type: String, default: '' },
   profilePic: {
     type: String,
   },
@@ -30,7 +35,13 @@ export const userSchema = new mongoose.Schema({
   accountBankVerified: { type: Boolean, default: false },
   accountBankVerificationAttempts: { type: Number, default: 0 },
   bvn: String,
-  accountTempInfo: { account_number: String, bvn: String },
+  accountTempInfo: {
+    account_number: String,
+    bvn: String,
+    account_bank: String,
+    legal_first_name: String,
+    legal_last_name: String,
+  },
   paystack_customer_code: { type: String, default: '' },
   paystack_customer_id: { type: String, default: '' },
   paystack_customer_integration: { type: String, default: '' },
