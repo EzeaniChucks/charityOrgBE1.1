@@ -518,6 +518,13 @@ export class AuthService {
       if (accountBankVerified) {
         extraObjects['idValidationStatus'] =
           accountValidationStatus.intentStatus;
+        if (
+          accountValidationStatus.intentStatus === 'attended' &&
+          !is_offically_verified
+        ) {
+          extraObjects['dissatisfaction_reason'] =
+            accountValidationStatus.dissatisfaction_reason;
+        }
       }
       return res.status(200).json({
         msg: 'success',
@@ -887,9 +894,16 @@ export class AuthService {
       const accountValidationStatus = await this.accountValIntent.findOne({
         userId: _id,
       });
-      if (accountBankVerified) {
+      if (accountBankVerified && accountValidationStatus) {
         extraObjects['idValidationStatus'] =
           accountValidationStatus.intentStatus;
+        if (
+          accountValidationStatus.intentStatus === 'attended' &&
+          !is_offically_verified
+        ) {
+          extraObjects['dissatisfaction_reason'] =
+            accountValidationStatus.dissatisfaction_reason;
+        }
       }
       return res.status(200).json({
         msg: 'success',
@@ -969,14 +983,17 @@ export class AuthService {
           pendingIntent?.intentStatus === 'attended' &&
           pendingIntent?.verdict === 'satisfied'
         ) {
-          return res
-            .status(400)
-            .json({
-              msg: 'Your account seems to be verified already. Check your notification or reach to customer support for confirmation',
-            });
+          return res.status(400).json({
+            msg: 'Your account seems to be verified already. Check your notification or reach to customer support for confirmation',
+          });
         }
         const admin = await this.User.findOne({ _id: process?.env?.ADMIN_ID });
 
+        //CODE LINE NOT YET WRITTEN
+        //CHECK IF THE USER HAS A PHOTOID ON THEIR INTENT,
+        //IF YES, DESTROY IT FORST BEFORE SAVING THE NEW ONE, TO SAVE CLOUDINARY SPACE
+
+        //Save id card photo
         const result = await this.cloudinary.uploadImage(idCard?.buffer);
 
         if (!result?.secure_url) {
@@ -1005,16 +1022,31 @@ export class AuthService {
             );
         }
         // console.log(user)
-        const valIntent = await this.accountValIntent.create({
-          userId,
-          userName: `${user?.firstName} ${user?.lastName}`,
-          govt_issued_id_doc: result?.secure_url,
-          accountBankCode: user?.accountBankCode,
-          accountBankName: user?.accountBank,
-          accountNumber: user?.accountNumber,
-          accountName: user?.accountName,
-          intentStatus: 'awaiting',
-        });
+        let valIntent;
+        if (pendingIntent) {
+          valIntent = await this.accountValIntent.findOneAndUpdate(
+            {
+              userId,
+            },
+            {
+              userName: `${user?.firstName} ${user?.lastName}`,
+              govt_issued_id_doc: result?.secure_url,
+              intentStatus: 'awaiting',
+            },
+            { new: true },
+          );
+        } else {
+          valIntent = await this.accountValIntent.create({
+            userId,
+            userName: `${user?.firstName} ${user?.lastName}`,
+            govt_issued_id_doc: result?.secure_url,
+            accountBankCode: user?.accountBankCode,
+            accountBankName: user?.accountBank,
+            accountNumber: user?.accountNumber,
+            accountName: user?.accountName,
+            intentStatus: 'awaiting',
+          });
+        }
 
         if (!valIntent) {
           return res

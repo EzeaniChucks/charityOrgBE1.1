@@ -199,17 +199,18 @@ export class AdminSettingsService {
       }
 
       if (verdict === 'satisfied') {
-        const user = await this.user.findOneAndUpdate(
-          { _id: userId },
-          { is_offically_verified: true },
-          { new: true },
-        );
-
+        
         await this.accountValIntent.findOneAndUpdate(
           { userId },
           { $set: { intentStatus: 'attended', verdict: 'satisfied' } },
         );
 
+        const user = await this.user.findOneAndUpdate(
+          { _id: userId },
+          { is_offically_verified: true },
+          { new: true },
+        );
+        
         await this.notificationservice.logSingleNotification(
           'Your photo_Id is approved and your account is now fully verified',
           user?._id,
@@ -254,6 +255,13 @@ export class AdminSettingsService {
           },
         );
 
+        await this.notificationservice.logSingleNotification(
+          `Your account verificatio needs a little work and you are good to go: Reason for rejection: ${dissatisfaction_reason}`,
+          user?._id,
+          '65c681387a7de5645968486f',
+          `${process.env.FRONT_END_CONNECTION}/user/${user?._id}`,
+          'account_verification',
+        );
         await sendEmail(
           user,
           `
@@ -262,11 +270,16 @@ export class AdminSettingsService {
           <h5>${user?.firstName} ${user?.lastName}, your account didn't pass verification yet</h5>
           <h5>Reason: ${dissatisfaction_reason}</h5>
           <h5>Please make neccessary adjustments and try re-verifying from your profile page</h5>
-            <button><a style='padding:5px; border-radius:10px;' href='${process.env.FRONT_END_CONNECTION}/user/${user?._id}'>Go to your profile</a></button>
-            </div>
-        `,
+          <button><a style='padding:5px; border-radius:10px;' href='${process.env.FRONT_END_CONNECTION}/user/${user?._id}'>Go to your profile</a></button>
+          </div>
+          `,
         );
       }
+      return res.status(200).json({
+        msg: 'successful',
+        payload:
+          'User verification intent is rejected. Notification has been been sent to the user along with reason for rejection',
+      });
     } catch (err: any) {
       return res.status(500).json({ msg: err?.message });
     }

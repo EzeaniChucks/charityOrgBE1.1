@@ -72,6 +72,31 @@ export class AdminSettingsController {
     return this.adminsettingsservice.fetchVerificationIntents(status, res);
   }
 
+  @Post('give_verification_verdict')
+  @ApiTags('Admin')
+  async giveVerificationVerdict(
+    @Body()
+    body: {
+      userId: string;
+      verdict: 'satisfied' | 'dissatisfied';
+      dissatisfaction_reason: string;
+    },
+    @Res() res: Response,
+  ) {
+    const { verdict, dissatisfaction_reason, userId } = body;
+    if (verdict === 'dissatisfied' && !dissatisfaction_reason) {
+      return res.status(400).json({
+        msg: 'Please give your reason for being dissatified. "dissatisfaction_reason" field cannot be empty',
+      });
+    }
+    return this.adminsettingsservice.giveVerificationVerdict(
+      verdict,
+      userId,
+      dissatisfaction_reason,
+      res,
+    );
+  }
+
   //set wallet charge range
   @Post('set_wallet_charge_amount')
   @ApiTags('Admin')
