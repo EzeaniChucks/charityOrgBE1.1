@@ -9,9 +9,23 @@ export const withdrawalIntentSchema = new mongoose.Schema(
     accountBank: { type: String, required: true },
     accountNumber: { type: String, required: true },
     accountBankName: { type: String, required: true },
+    accountBankCode: { type: String, required: true },
+
+    //cancelled is done by user.
+    //rejected is done by admin, with a reason given
+    //attended and failed are from FL webhook response
+    //processing happens when admin submits the request to FL for processing funds to bank
     intentStatus: {
       type: String,
-      enum: ['unattended', 'processing', 'attended', 'cancelled'],
+      enum: [
+        'pending',
+        'processing',
+        'attended',
+        'rejected',
+        'cancelled',
+        'failed',
+      ],
+      default: 'pending',
     },
     cancellationReason: { type: String, default: '' },
   },

@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { WithdrawIntentController } from './withdrawalIntent.controller';
 import { WithdrawIntentService } from './withdrawalIntent.service';
 import { MongooseModule } from '@nestjs/mongoose';
-import { withdrawalIntentSchema } from './withdrawal.model';
+import { withdrawalIntentSchema } from './withdrawalIntent.model';
 import { userSchema } from 'src/authModule/auth.model';
 import { PaymentModule } from 'src/paymentModule/payment.module';
 

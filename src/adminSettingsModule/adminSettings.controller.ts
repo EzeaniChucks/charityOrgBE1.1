@@ -97,6 +97,55 @@ export class AdminSettingsController {
     );
   }
 
+  @Get('fetch_withdrawal_intent')
+  @ApiTags('Admin')
+  async fetchWithdrawalIntents(
+    @Query('intentStatus')
+    intentStatus: 'pending' | 'processing' | 'attended' | 'cancelled',
+    @Res() res: Response,
+  ) {
+    if (!intentStatus) {
+      return res.status(400).json({
+        msg: 'status query parameter should not be empty. Enums can be attended, unattended or all',
+      });
+    }
+    return this.adminsettingsservice.fetchWithdrawalIntents({
+      intentStatus,
+      res,
+    });
+  }
+
+  @Post('accept_withdrawal_intent')
+  @ApiTags('Admin')
+  async acceptWithdrawalIntent(
+    @Body()
+    body: { intentId: string; userId: string },
+    @Res() res: Response,
+  ) {
+    const { intentId, userId } = body;
+    return this.adminsettingsservice.acceptWithdrawalIntent({
+      userId,
+      intentId,
+      res,
+    });
+  }
+
+  @Post('reject_withdrawal_intent')
+  @ApiTags('Admin')
+  async rejectWithdrawalIntent(
+    @Body()
+    body: { intentId: string; userId: string; cancellationReason: string },
+    @Res() res: Response,
+  ) {
+    const { intentId, userId, cancellationReason } = body;
+    return this.adminsettingsservice.rejectWithdrawalIntent({
+      userId,
+      cancellationReason,
+      intentId,
+      res,
+    });
+  }
+
   //set wallet charge range
   @Post('set_wallet_charge_amount')
   @ApiTags('Admin')

@@ -14,7 +14,7 @@ import { eventSchema } from 'src/eventsModule/events.model';
 import { eventDetailsSchema } from 'src/eventDetailsModule/eventDetails.model';
 import { notificationSchema } from 'src/notificationModule/notifModel';
 import { NotifModule } from 'src/notificationModule/notifModule';
-import { withdrawalIntentSchema } from 'src/withdrawalIntent/withdrawal.model';
+import { withdrawalIntentSchema } from 'src/withdrawalIntent/withdrawalIntent.model';
 
 @Module({
   imports: [

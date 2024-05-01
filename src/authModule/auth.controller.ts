@@ -30,6 +30,7 @@ import {
   StartRegisterResponseDTO,
   VerifyEmailDTO,
   VerifyEmailResponseDTO,
+  WithdrawalIntentDTO,
 } from './auth.dto';
 import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 
@@ -190,6 +191,63 @@ export class AuthController {
       req,
       res,
     );
+  }
+
+  @Post('auth/create_withdrawal_intent')
+  @ApiTags('Auth')
+  async createWithdrawalIntent(
+    @Body() body: WithdrawalIntentDTO,
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
+    const {
+      userId,
+      userName,
+      amount,
+      currency,
+      accountBank,
+      accountBankCode,
+      accountNumber,
+      accountBankName,
+    } = body;
+    return await this.authservice.createWithdrawalIntent({
+      userId,
+      userName,
+      amount,
+      currency,
+      accountBank,
+      accountBankCode,
+      accountNumber,
+      accountBankName,
+      res,
+    });
+  }
+
+  @Post('auth/fetch_withdrawal_intent')
+  @ApiTags('Auth')
+  async fetchSingleUserWithdrawalIntents(
+    @Body() body: WithdrawalIntentDTO,
+    @Res() res: Response,
+  ) {
+    const { userId } = body;
+    return this.authservice.fetchSingleUserWithdrawalIntents({
+      userId,
+      res,
+    });
+  }
+
+  @Post('auth/cancel_withdrawal_intent')
+  @ApiTags('Auth')
+  async cancelUserWithdrawalIntent(
+    @Body() body: WithdrawalIntentDTO,
+    @Res() res: Response,
+  ) {
+    const { userId, intentId } = body;
+    return this.authservice.cancelUserWithdrawalIntent({
+      userId,
+      intentId,
+      res,
+    });
   }
 
   @Post('auth/editUserSubType')

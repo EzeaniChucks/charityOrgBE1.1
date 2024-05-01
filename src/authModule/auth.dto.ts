@@ -173,6 +173,27 @@ export class EditUserDetailsDTO {
   address?: string;
 }
 
+export class WithdrawalIntentDTO {
+  @ApiProperty({ example: 'mongooseGeneratedId' })
+  userId: string;
+  @ApiProperty({ example: 'John Doe' })
+  userName: string;
+  @ApiProperty({ example: 200 })
+  amount: number;
+  @ApiProperty({ example: 'NGN' })
+  currency: string;
+  @ApiProperty({ example: 'Guarantee Trust Bank' })
+  accountBank: string;
+  @ApiProperty({ example: '058' })
+  accountBankCode: string;
+  @ApiProperty({ example: '0034567845' })
+  accountNumber: string;
+  @ApiProperty({ example: 'John Doe' })
+  accountBankName: string;
+  @ApiProperty({ example: 'mongooseGeneratedId' })
+  intentId: string;
+}
+
 export class EditUserSubTypeDTO {
   @ApiProperty({ example: 'Free or Gold or Platinum' })
   subType: string;

@@ -712,6 +712,12 @@ export class PaymentService {
       // await this.validateUserWallet(userId);
       // await this.decreaseWallet(userId, amount, currency); //It is necessary to call this here because a code within this method checks if user has requested amount in their wallet
       // // await this.createWalletTransactions(userId)
+
+      await this.validateUserWallet(userId);
+
+      //THEN SUBTRACT AMOUNT FROM THE WALLET
+
+      //CREATE WALLET TRX
       const walletTrans = await this.createWalletTransactions(
         userId,
         false,
@@ -844,7 +850,10 @@ export class PaymentService {
   async respondToFLBankPayment(body: any) {
     // console.log('call back received');
     const { id, currency, amount, meta, narration, status } = body.data;
+
     if (status === 'SUCCESSFUL') {
+      //IT IS IMPORTANT TO ALSO UPDATE WITHDRAWAL INTENT STATUS
+      //FROM PROCESSING TO ATTENDED
       await this.updateTransactionStatus(
         id,
         'successful',
@@ -855,15 +864,22 @@ export class PaymentService {
         'successful',
         'amount deposited to bank',
       );
+      
+      await this.withdrawalIntent.findOneAndUpdate(
+        { userId: meta?.beneficiary_id, _id: meta?.intentId },
+        { intentStatus: 'attended' },
+        { new: true },
+      );
+
       return response
         .status(200)
-        .json({ msg: 'Succesful: Money has been sent to your bank account' });
+        .json({ msg: 'Successful: Money has been sent to your bank account' });
     } else if (status === 'FAILED') {
       await this.increaseWallet(
         meta?.beneficiary_id,
         amount,
         currency,
-        'send to bank',
+        'wallet refund from failed bank transfer',
       );
       await this.updateTransactionStatus(
         id,
@@ -875,6 +891,12 @@ export class PaymentService {
         'failed',
         'amount not deposited to bank',
       );
+      await this.withdrawalIntent.findOneAndUpdate(
+        { userId: meta?.beneficiary_id, _id: meta?.intentId },
+        { intentStatus: 'failed' },
+        { new: true },
+      );
+
       //i decided against deleting transaction history for failed transfer
       // await this.deleteTransaction(id)
       // await this.deleteWalletTransaction(meta?.wallettransaction_id)
@@ -882,8 +904,8 @@ export class PaymentService {
         msg: body.data.complete_message.includes(
           'Insufficient funds in customer wallet',
         )
-          ? 'Not Successful. Contact support with this particular error message:Disburse Failed'
-          : 'Something went wrong',
+          ? 'Not Successful. Contact support with this particular error message: Disburse Failed 700'
+          : body?.data?.complete_message,
       });
       // const request_headers_from_fl = {
       //   accept: 'application/json, text/plain, */*',

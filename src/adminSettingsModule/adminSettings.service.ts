@@ -17,6 +17,7 @@ import { chargeRangeDeletionDTO } from './adminSettings.dto';
 import { sendEmail } from 'src/util';
 import * as request from 'request';
 import { NotifService } from 'src/notificationModule/notifService';
+import * as Flutterwave from 'flutterwave-node-v3';
 
 @Injectable()
 export class AdminSettingsService {
@@ -26,6 +27,8 @@ export class AdminSettingsService {
     @InjectModel('events') private event: Model<any>,
     @InjectModel('membership') private membership: Model<any>,
     @InjectModel('accountValIntent') private accountValIntent: Model<any>,
+    @InjectModel('withdrawalIntent') private withdrawalIntent: Model<any>,
+    @InjectModel('vCardIntent') private vCardIntent: Model<any>,
     private paymentservice: PaymentService,
     private notificationservice: NotifService,
   ) {}
@@ -199,7 +202,6 @@ export class AdminSettingsService {
       }
 
       if (verdict === 'satisfied') {
-        
         await this.accountValIntent.findOneAndUpdate(
           { userId },
           { $set: { intentStatus: 'attended', verdict: 'satisfied' } },
@@ -210,7 +212,7 @@ export class AdminSettingsService {
           { is_offically_verified: true },
           { new: true },
         );
-        
+
         await this.notificationservice.logSingleNotification(
           'Your photo_Id is approved and your account is now fully verified',
           user?._id,
@@ -285,7 +287,271 @@ export class AdminSettingsService {
     }
   }
 
-  async fetchWithdrawalIntents() {}
+  async fetchWithdrawalIntents({
+    intentStatus,
+    res,
+  }: {
+    intentStatus: 'pending' | 'processing' | 'attended' | 'cancelled';
+    res: Response;
+  }) {
+    try {
+      const intentStatus_enums = [
+        'pending',
+        'processing',
+        'attended',
+        'cancelled',
+      ];
+      if (!intentStatus_enums.includes(intentStatus)) {
+        return res.status(400).json({
+          msg: "intent status can only be 'pending', 'processing', 'attended' or 'cancelled'",
+        });
+      }
+      const userIntents = await this.withdrawalIntent.find({ intentStatus });
+      return res.status(201).json({ msg: 'successful', payload: userIntents });
+    } catch (err) {
+      return res.status(500).json({ msg: err?.message });
+    }
+  }
+
+  async acceptWithdrawalIntent({
+    userId,
+    intentId,
+    res,
+  }: {
+    userId: string;
+    intentId: string;
+    res: Response;
+  }) {
+    try {
+      //create flutterwave withdrawal request here
+      const user = await this.user.findOne({ _id: userId });
+      if (!user) {
+        return res
+          .status(400)
+          .json('forbidden request. This user doen not exist');
+      }
+
+      const intent = await this.withdrawalIntent.findOne({
+        userId,
+        _id: intentId,
+      });
+
+      if (!intent) {
+        return res
+          .status(400)
+          .json(
+            'This withdrawal request does not exist. Please contact developer team for extra assistance',
+          );
+      }
+
+      if (intent?.intentStatus === 'cancelled') {
+        return res
+          .status(400)
+          .json(
+            'This withdrawl request has been cancelled by user and should no longer be processed',
+          );
+      }
+
+      const amount = intent?.amount;
+      const currency = intent?.currency;
+      const account_bank = intent?.accountBankCode;
+      const account_number = intent?.accountNumber;
+      // const account_bank = intent?.accountBank;
+      // const account_bank_name = intent?.accountBankName;
+
+      //wallet has been validated and account balance has been debited during creation of intent by user
+
+      //here, just create the transaction and wallet transaction docs
+      const walletTrans = await this.paymentservice.createWalletTransactions(
+        userId,
+        false,
+        'pending',
+        currency,
+        amount,
+        'Wallet Withdraw',
+        'Bank Transfer',
+      );
+
+      const callback_url = `https://${process.env.BACK_END_CONNECTION}/respond_to_fl_bank_payment`;
+
+      const reference = `${user?.firstName}_${user?.lastName}_${Date.now()}`;
+
+      const data = {
+        account_bank,
+        account_number,
+        amount: Number(amount),
+        narration: `Transfer from ${user?.firstName} ${user?.lastName} @CharityApp`,
+        currency,
+        reference,
+        callback_url,
+        debit_currency: 'NGN',
+        beneficiary_name: `${user?.firstName} ${user?.lastName}`,
+        meta: {
+          beneficiary_id: userId,
+          first_name: user.firstName,
+          last_name: user.lastName,
+          intentId,
+          mobile_number: user.phoneNumber,
+          email: user.email,
+          beneficiary_country: user.country || 'NG',
+          beneficiary_occupation: 'merchant',
+          wallettransaction_id: walletTrans._id,
+          // wallettransaction_id: 'test_wallet_trx_ID',
+          recipient_address:
+            user.address || 'opposite Access bank, ilupeju, lagos Nigeria',
+          sender: 'Bankole Kasumu',
+          sender_country: 'NG',
+          sender_id_number: '22177327049',
+          sender_id_type: 'ID CARD',
+          sender_id_expiry: 'N/A',
+          sender_mobile_number: '2348124669500',
+          sender_address: 'opposite Access bank, ilupeju, lagos Nigeria',
+          sender_occupation: 'Legal Practitioner',
+          sender_beneficiary_relationship: 'Customer',
+          transfer_purpose: 'Wallet withdrawal',
+        },
+      };
+
+      const flw = new Flutterwave(
+        // 'FLWPUBK_TEST-31f261f02a971b32bd56cf4deff5e74a-X',
+        `${process.env.FLUTTERWAVE_V3_PUBLIC_KEY}`,
+        `${process.env.FLUTTERWAVE_V3_SECRET_KEY}`,
+      );
+
+      const result = await flw.Transfer.initiate(data);
+      // console.log(result);
+      if (result.status === 'error') {
+        return res
+          .status(400)
+          .json({ msg: 'failed', payload: result?.message });
+      }
+
+      await this.paymentservice.createTransaction(
+        userId,
+        false,
+        result?.data?.id,
+        'pending',
+        currency,
+        amount,
+        {
+          email: user?.email,
+          phone_number: user?.phoneNumber,
+          name: `${user?.firstName} ${user?.lastName}`,
+        },
+        `charityapp${Date.now()}${Math.random()}`,
+        'Wallet Withdraw: Bank credit transfer',
+        'Bank Transaction: Flutterwave bank credit',
+      );
+
+      const intentUpdated = await this.withdrawalIntent.findOneAndUpdate(
+        { userId, _id: intentId },
+        { intentStatus: 'processing' },
+        { new: true },
+      );
+      return res.status(200).json({
+        msg: 'success',
+        payload: { ...result?.data, ...intentUpdated },
+      });
+    } catch (err) {
+      return res.status(500).json({ msg: err?.message });
+    }
+  }
+
+  async rejectWithdrawalIntent({
+    userId,
+    intentId,
+    cancellationReason,
+    res,
+  }: {
+    userId: string;
+    intentId: string;
+    cancellationReason: string;
+    res: Response;
+  }) {
+    try {
+      //create flutterwave withdrawal request here
+      const user = await this.user.findOne({ _id: userId });
+      if (!user) {
+        return res
+          .status(400)
+          .json('forbidden request. This user doen not exist');
+      }
+
+      const intent = await this.withdrawalIntent.findOne({
+        userId,
+        _id: intentId,
+      });
+
+      if (!intent) {
+        return res
+          .status(400)
+          .json(
+            'This withdrawal request does not exist. Please contact developer team for extra assistance',
+          );
+      }
+
+      if (intent?.intentStatus === 'cancelled') {
+        return res
+          .status(400)
+          .json(
+            'This withdrawl request has been cancelled by user and should no longer be processed',
+          );
+      }
+
+      //refund the user
+      await this.paymentservice.increaseWallet(
+        user?._id,
+        Number(intent.amount),
+        intent?.currency,
+        'wallet refund from admin rejection',
+      );
+
+      //update withdrawal intent to show rejection
+      const intentUpdated = await this.withdrawalIntent.findOneAndUpdate(
+        { userId, _id: intentId },
+        { intentStatus: 'rejected', cancellationReason },
+        { new: true },
+      );
+
+      await this.notificationservice.logSingleNotification(
+        `We cannot process your withdrawal request for ${intent?.currency} ${
+          intent?.amount
+        }, which you submitted on ${new Date(
+          intent?.createdAt,
+        ).toDateString()}. Please click here for details`,
+        user?._id,
+        '65c681387a7de5645968486f',
+        `${process.env.FRONT_END_CONNECTION}/user/${user?._id}`,
+        'account_verification',
+      );
+
+      await sendEmail(
+        user,
+        `
+          <div>
+            <h4>Hey ${user?.firstName} ${
+          user?.lastName
+        }, we cannot process your withdrawal request for ${intent?.currency} ${
+          intent?.amount
+        }, which you submitted on ${new Date(
+          intent?.createdAt,
+        ).toDateString()}</h4>
+            <h5>Reason: ${cancellationReason}</h5>
+            <h6>Click the button below to see the details on your profile</h6>
+            <button><a style='padding:5px; border-radius:10px;' href='${
+              process.env.FRONT_END_CONNECTION
+            }/user/${user?._id}'>Go to your profile</a></button>
+            </div>
+        `,
+      );
+      return res.status(200).json({
+        msg: 'success',
+        payload: intentUpdated,
+      });
+    } catch (err) {
+      return res.status(500).json({ msg: err?.message });
+    }
+  }
 
   async walletChargeHandler(
     completeBody: {

@@ -26,6 +26,8 @@ export class AuthService {
     @InjectModel('wallet') private wallet: Model<any>,
     @InjectModel('adminsettings') private admin: Model<any>,
     @InjectModel('accountValIntent') private accountValIntent: Model<any>,
+    @InjectModel('withdrawalIntent') private withdrawalIntent: Model<any>,
+    @InjectModel('vCardIntent') private vCardIntent: Model<any>,
     @Inject(forwardRef(() => PaymentService))
     private paymentservice: PaymentService,
     private adminservice: AdminSettingsService,
@@ -930,7 +932,7 @@ export class AuthService {
   }
 
   //only happens after a user's account is verified by paystack, if they are nigerians
-  //a verification intent is sent to admin thereafter
+  //a verification intent is created and sent to admin thereafter
   async acceptGovermentIssuedIdCard(
     userId: string,
     idCard: Express.Multer.File,
@@ -1072,6 +1074,128 @@ export class AuthService {
             'Verification intent has been created. Approval status will communicated to you soon',
         });
       }
+    } catch (err) {
+      return res.status(500).json({ msg: err?.message });
+    }
+  }
+
+  async createWithdrawalIntent({
+    userId,
+    userName,
+    amount,
+    currency,
+    accountBank,
+    accountBankCode,
+    accountNumber,
+    accountBankName,
+    res,
+  }: {
+    userId: string;
+    userName: string;
+    amount: number;
+    currency: string;
+    accountBank: string;
+    accountBankCode: string;
+    accountNumber: string;
+    accountBankName: string;
+    res: Response;
+  }) {
+    try {
+      //first check if user does not have pending withdrawal
+      const intentExists = await this.withdrawalIntent.findOne({
+        userId,
+        intentStatus: 'pending',
+      });
+
+      if (intentExists) {
+        return res.status(400).json({
+          msg: 'You have a pending withdrawal request. Cancel the request before making new ones',
+        });
+      }
+
+      //ensure they have a wallet created
+      await this.paymentservice.validateUserWallet(userId);
+      //decrement the wallet by amount to be withdrawn.
+      //This method checks if the user has enough funds in the wallet currency
+      await this.paymentservice.decreaseWallet(userId, amount, currency);
+
+      const intent = await this.withdrawalIntent.create({
+        userId,
+        userName,
+        amount,
+        currency,
+        accountBank,
+        accountNumber,
+        accountBankCode,
+        accountBankName,
+      });
+      if (!intent) {
+        return res.status(400).json({ msg: 'Intent could not be created' });
+      }
+      return res.status(201).json({
+        msg: 'successful',
+        payload: {
+          _id: intent?._id,
+          intentStatus: intent?.intentStatus,
+          userId,
+          userName,
+        },
+      });
+    } catch (err) {
+      return res.status(500).json({ msg: err?.message });
+    }
+  }
+
+  async fetchSingleUserWithdrawalIntents({
+    userId,
+    res,
+  }: {
+    userId: string;
+    res: Response;
+  }) {
+    try {
+      //unlike wallet transaction history, user intents will exclusively show user's withdrawal history
+      //this is where user checks to find the status of their withdrawals
+      //they can also cancel the withdrawals
+      const userIntents = await this.withdrawalIntent
+        .find({ userId })
+        .select('amount currency intentStatus cancellationReason createdAt updatedAt');
+      return res.status(201).json({ msg: 'successful', payload: userIntents });
+    } catch (err) {
+      return res.status(500).json({ msg: '' });
+    }
+  }
+
+  async cancelUserWithdrawalIntent({
+    userId,
+    intentId,
+    res,
+  }: {
+    userId: string;
+    intentId: string;
+    res: Response;
+  }) {
+    try {
+      //unlike wallet transaction history, user intents will exclusively show user's withdrawal history
+      //this is where user checks to find the status of their withdrawals
+      //they can also cancel the withdrawals
+      const intentIsProccessing = await this.withdrawalIntent.findOne({
+        userId,
+        _id: intentId,
+      });
+
+      if (intentIsProccessing?.intentStatus === 'processing') {
+        return res.status(400).json({
+          msg: 'You can only cancel a withdrawal request while it is pending. Your withdrawl is already being processed and can no longer be canceled',
+          payload:
+            'You can only cancel a withdrawal request while it is pending. Your withdrawl is already being processed and can no longer be canceled',
+        });
+      }
+      intentIsProccessing.intentStatus = 'cancelled';
+      intentIsProccessing.save();
+      return res
+        .status(200)
+        .json({ msg: 'successful', payload: intentIsProccessing });
     } catch (err) {
       return res.status(500).json({ msg: err?.message });
     }
