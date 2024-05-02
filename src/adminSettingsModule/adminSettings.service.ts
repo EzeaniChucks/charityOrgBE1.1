@@ -521,33 +521,40 @@ export class AdminSettingsService {
         ).toDateString()}. Please click here for details`,
         user?._id,
         '65c681387a7de5645968486f',
-        `${process.env.FRONT_END_CONNECTION}/user/${user?._id}`,
+        `${process.env.FRONT_END_CONNECTION}/dashboard/${user?._id}?click='withdrawal'`,
         'account_verification',
       );
+
+      const submissionDate = new Date(
+          intent?.createdAt,
+        ).toDateString()
 
       await sendEmail(
         user,
         `
           <div>
-            <h4>Hey ${user?.firstName} ${
-          user?.lastName
-        }, we cannot process your withdrawal request for ${intent?.currency} ${
-          intent?.amount
-        }, which you submitted on ${new Date(
-          intent?.createdAt,
-        ).toDateString()}</h4>
+            <h4>Hey ${user?.firstName} ${user?.lastName}, we cannot process your withdrawal request for ${intent?.currency} ${intent?.amount}, which you submitted on ${submissionDate}</h4>
             <h5>Reason: ${cancellationReason}</h5>
             <h6>Click the button below to see the details on your profile</h6>
-            <button><a style='padding:5px; border-radius:10px;' href='${
-              process.env.FRONT_END_CONNECTION
-            }/user/${user?._id}'>Go to your profile</a></button>
+            <button><a style='padding:5px; border-radius:10px;' href='${process.env.FRONT_END_CONNECTION}/user/${user?._id}'>Go to your profile</a></button>
             </div>
         `,
-      );
-      return res.status(200).json({
-        msg: 'success',
-        payload: intentUpdated,
-      });
+      )
+        .then(
+          (response) => {
+            return res.status(200).json({
+              msg: 'success',
+              payload: intentUpdated,
+            });
+          },
+          (err) => {
+            console.log('email err', err);
+            return res.status(400).json({ msg: 'unsuccessful', payload: err });
+          },
+        )
+        .catch((err) => {
+          return res.status(500).json({ msg: err?.message });
+        });
     } catch (err) {
       return res.status(500).json({ msg: err?.message });
     }
