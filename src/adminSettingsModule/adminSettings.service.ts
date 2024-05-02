@@ -506,6 +506,33 @@ export class AdminSettingsService {
         'wallet refund from admin rejection',
       );
 
+      await this.paymentservice.createWalletTransactions(
+        userId,
+        true,
+        'successful',
+        intent?.currency,
+        Number(intent?.amount),
+        'Wallet Withdraw',
+        'Wallet refund from withdrawal failure',
+      );
+
+      await this.paymentservice.createTransaction(
+        userId,
+        true,
+        intentId,
+        'successful',
+        intent?.currency,
+        Number(intent?.amount),
+        {
+          email: user?.email,
+          phone_number: user?.phoneNumber,
+          name: `${user?.firstName} ${user?.lastName}`,
+        },
+        `charityapp${Date.now()}${Math.random()}`,
+        'Wallet Withdraw: Bank credit transfer',
+        'Bank Transaction: Flutterwave bank credit',
+        'inapp',
+      );
       //update withdrawal intent to show rejection
       const intentUpdated = await this.withdrawalIntent.findOneAndUpdate(
         { userId, _id: intentId },
