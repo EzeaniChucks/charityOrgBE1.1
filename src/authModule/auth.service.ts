@@ -95,15 +95,7 @@ export class AuthService {
       const isPassCorrect = await bcrypt.compare(password, user.password);
       if (isPassCorrect) {
         if (user?.isVerified) {
-          const {
-            _id,
-            email,
-            firstName,
-            lastName,
-            phoneNumber,
-            isVerified,
-            isAdmin,
-          } = user;
+          const { _id, email, isAdmin } = user;
 
           const token = await jwt.sign(
             {
@@ -116,15 +108,7 @@ export class AuthService {
               expiresIn: process.env.JWT_LIFETIME,
             },
           );
-
-          // await attachCookiesToResponse(res, {
-          //   _id,
-          //   firstName,
-          //   lastName,
-          //   phoneNumber,
-          //   isAdmin,
-          // });
-
+          
           return res.status(201).json({
             msg: 'success',
             user: {
@@ -1159,7 +1143,9 @@ export class AuthService {
       //they can also cancel the withdrawals
       const userIntents = await this.withdrawalIntent
         .find({ userId })
-        .select('amount currency intentStatus cancellationReason createdAt updatedAt');
+        .select(
+          'amount currency intentStatus cancellationReason createdAt updatedAt',
+        );
       return res.status(201).json({ msg: 'successful', payload: userIntents });
     } catch (err) {
       return res.status(500).json({ msg: '' });
@@ -1196,6 +1182,127 @@ export class AuthService {
       return res
         .status(200)
         .json({ msg: 'successful', payload: intentIsProccessing });
+    } catch (err) {
+      return res.status(500).json({ msg: err?.message });
+    }
+  }
+
+  //virtual Card Intents
+  async createVirtualCardIntent({
+    userId,
+    userName,
+    res,
+  }: {
+    userId: string;
+    userName: string;
+    res: Response;
+  }) {
+    try {
+      const user = await this.User.findOne({ _id: userId });
+      //first check if user does not have pending withdrawal
+      if (!user) {
+        return res.status(400).json({
+          msg: 'Unauthorized. This user does not exist',
+        });
+      }
+
+      if (!user?.is_offically_verified) {
+        return res.status(400).json({
+          msg: 'Unauthorized. Only fully verified users can create virtual cards',
+        });
+      }
+
+      const intentExists = await this.vCardIntent.findOne({
+        userId,
+        intentStatus: 'awaiting',
+      });
+
+      if (intentExists) {
+        return res.status(400).json({
+          msg: 'You have a pending request. Wait for the result before creating a new virtual card',
+        });
+      }
+
+      //check if user has requested amount in their wallet, if not reject.
+      // first validate user wallet
+      //ensure they have a wallet created
+      await this.paymentservice.validateUserWallet(userId);
+      //decrement the wallet by amount to be withdrawn.
+      //This method checks if the user has enough funds in the wallet currency
+      await this.paymentservice.decreaseWallet(userId, Number(100), 'NGN');
+
+
+      const intent = await this.vCardIntent.create({
+        userId,
+        userName,
+        amount: 100,
+        currency: 'NGN',
+      });
+      if (!intent) {
+        return res
+          .status(400)
+          .json({ msg: 'Virtual request could not be created' });
+      }
+      return res.status(201).json({
+        msg: 'successful',
+        payload: {
+          _id: intent?._id,
+          intentStatus: intent?.intentStatus,
+          userId,
+          userName,
+        },
+      });
+    } catch (err) {
+      return res.status(500).json({ msg: err?.message });
+    }
+  }
+
+  async fetchSingleUserVirtualCardIntents({
+    userId,
+    res,
+  }: {
+    userId: string;
+    res: Response;
+  }) {
+    try {
+      //unlike wallet transaction history, user intents will exclusively show user's withdrawal history
+      //this is where user checks to find the status of their withdrawals
+      //they can also cancel the withdrawals
+      const userIntents = await this.vCardIntent
+        .find({ userId })
+        .select(
+          'amount currency intentStatus cancellationReason createdAt updatedAt',
+        );
+      return res.status(201).json({ msg: 'successful', payload: userIntents });
+    } catch (err) {
+      return res.status(500).json({ msg: '' });
+    }
+  }
+
+  async cancelUserVirtualCardIntent({
+    userId,
+    intentId,
+    res,
+  }: {
+    userId: string;
+    intentId: string;
+    res: Response;
+  }) {
+    try {
+      //unlike wallet transaction history, user intents will exclusively show user's withdrawal history
+      //this is where user checks to find the status of their withdrawals
+      //they can also cancel the withdrawals
+      const intentIsProccessing = await this.vCardIntent.findOne({
+        userId,
+        _id: intentId,
+      });
+
+      intentIsProccessing.intentStatus = 'cancelled';
+      intentIsProccessing.save();
+      return res.status(200).json({
+        msg: 'successful',
+        payload: { ...intentIsProccessing, dissatisfaction_reason: null },
+      });
     } catch (err) {
       return res.status(500).json({ msg: err?.message });
     }

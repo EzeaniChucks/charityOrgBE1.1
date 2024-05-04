@@ -146,6 +146,55 @@ export class AdminSettingsController {
     });
   }
 
+  @Get('fetch_virtual_card_intent')
+  @ApiTags('Admin')
+  async fetchVirtualCardIntents(
+    @Query('intentStatus')
+    intentStatus: 'awaiting' | 'processing' | 'attended' | 'cancelled',
+    @Res() res: Response,
+  ) {
+    if (!intentStatus) {
+      return res.status(400).json({
+        msg: 'status query parameter should not be empty. Enums can be attended, unattended or all',
+      });
+    }
+    return this.adminsettingsservice.fetchVirtualCardIntents({
+      intentStatus,
+      res,
+    });
+  }
+
+  @Post('accept_virtual_card_intent')
+  @ApiTags('Admin')
+  async acceptVirtualCardIntent(
+    @Body()
+    body: { intentId: string; userId: string },
+    @Res() res: Response,
+  ) {
+    const { intentId, userId } = body;
+    return this.adminsettingsservice.acceptVirtualCardIntent({
+      userId,
+      intentId,
+      res,
+    });
+  }
+
+  @Post('reject_virtual_card_intent')
+  @ApiTags('Admin')
+  async rejectVirtualCardIntent(
+    @Body()
+    body: { intentId: string; userId: string; dissatisfaction_reason: string },
+    @Res() res: Response,
+  ) {
+    const { intentId, userId, dissatisfaction_reason } = body;
+    return this.adminsettingsservice.rejectVirtualCardIntent({
+      userId,
+      dissatisfaction_reason,
+      intentId,
+      res,
+    });
+  }
+
   //set wallet charge range
   @Post('set_wallet_charge_amount')
   @ApiTags('Admin')

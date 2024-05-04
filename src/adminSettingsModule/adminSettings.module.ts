@@ -12,6 +12,7 @@ import { accountValIntentSchema } from 'src/accountValidationIntent/accountValIn
 import { NotifModule } from 'src/notificationModule/notifModule';
 import { withdrawalIntentSchema } from 'src/withdrawalIntent/withdrawalIntent.model';
 import { vitualCardSchema } from 'src/virtualCardModule/virtualCardModel';
+import { vCIntentSchema } from 'src/createVirtualCardIntent/createVCIntent.model';
 
 @Module({
   imports: [
@@ -24,13 +25,16 @@ import { vitualCardSchema } from 'src/virtualCardModule/virtualCardModel';
       { name: 'membership', schema: membershipSchema },
     ]),
     MongooseModule.forFeature([
+      { name: 'virtualcard', schema: vitualCardSchema },
+    ]),
+    MongooseModule.forFeature([
       { name: 'accountValIntent', schema: accountValIntentSchema },
     ]),
     MongooseModule.forFeature([
       { name: 'withdrawalIntent', schema: withdrawalIntentSchema },
     ]),
     MongooseModule.forFeature([
-      { name: 'vCardIntent', schema: vitualCardSchema },
+      { name: 'vCardIntent', schema: vCIntentSchema },
     ]),
     PaymentModule,
     NotifModule,

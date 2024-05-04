@@ -14,177 +14,170 @@ export class VirtualCardServices {
     private readonly payment: PaymentService,
   ) {}
 
-  async createVirtualCard({
-    userId,
-    amount,
-    currency,
-    data,
-    res,
-  }: {
-    userId: string;
-    amount: number;
-    currency: string;
-    data: {
-      title: 'Mr' | 'Mrs' | 'Miss';
-      phone: string;
-      gender: 'M' | 'F';
-      billing_address: string;
-      billing_city: string;
-      billing_state: string;
-      billing_country: string;
-      billing_postal_code: string;
-    };
-    res: Response;
-  }) {
-    try {
-      //amount to prefund virtual card with must not be lower than N100.
-      if (currency === 'NGN' && Number(amount) < 100) {
-        return res.status(400).json({
-          msg: 'unsuccessful',
-          payload:
-            'Amount to prefund new virtual card with cannot be lower than NGN 100',
-        });
-      }
-      //fetch user with Id
-      const user = await this.user.findOne({ _id: userId });
-      if (!user) {
-        return res
-          .status(400)
-          .json({ msg: 'unsuccessful', payload: 'Unauthorized request' });
-      }
-      const userName = `${user?.firstName} ${user?.lastName}`;
+  // async createVirtualCard({
+  //   userId,
+  //   amount,
+  //   currency,
+  //   data,
+  //   res,
+  // }: {
+  //   userId: string;
+  //   amount: number;
+  //   currency: string;
+  //   data: {
+  //     title: 'Mr' | 'Mrs' | 'Miss';
+  //     phone: string;
+  //     gender: 'M' | 'F';
+  //     billing_address: string;
+  //     billing_city: string;
+  //     billing_state: string;
+  //     billing_country: string;
+  //     billing_postal_code: string;
+  //   };
+  //   res: Response;
+  // }) {
+  //   try {
+  //     //amount to prefund virtual card with must not be lower than N100.
+  //     if (currency === 'NGN' && Number(amount) < 100) {
+  //       return res.status(400).json({
+  //         msg: 'unsuccessful',
+  //         payload:
+  //           'Amount to prefund new virtual card with cannot be lower than NGN 100',
+  //       });
+  //     }
+  //     //fetch user with Id
+  //     const user = await this.user.findOne({ _id: userId });
+  //     if (!user) {
+  //       return res
+  //         .status(400)
+  //         .json({ msg: 'unsuccessful', payload: 'Unauthorized request' });
+  //     }
+  //     const userName = `${user?.firstName} ${user?.lastName}`;
 
-      //check if user has requested amount in their wallet, if not reject.
-      // first validate user wallet
-      const oldwallet = await this.payment.validateUserWallet(userId);
-      // check if user has up to that amount in their wallet
-      let particularCurrency = oldwallet.currencies.find((eachCur: any) => {
-        return eachCur?.currency_type === currency;
-      });
-      if (particularCurrency?.balance < Number(amount)) {
-        return res.status(400).json(
-          `You do not have up to ${amount} ${particularCurrency.currency_type} in your ${particularCurrency.currency_type} wallet`,
-        );
-      }
+  //     //prepare data to send to flutterwave API
+  //     const testData = {
+  //       currency,
+  //       amount: Number(amount),
+  //       first_name: user?.firstName,
+  //       // first_name: 'Ezeani',
+  //       last_name: user?.lastName,
+  //       // last_name: 'Chucks',
+  //       // date_of_birth: user?.date_of_birth,
+  //       date_of_birth: '1991/01/06',
+  //       email: user?.email,
+  //       // email: 'concord_chucks2@yahoo.com',
+  //       billing_name: userName,
+  //       // billing_name: 'Ezeani Chucks',
+  //       title: data?.title,
+  //       phone: data?.phone,
+  //       gender: data?.gender,
+  //       billing_address: data?.billing_address,
+  //       billing_city: data?.billing_city,
+  //       billing_state: data?.billing_state,
+  //       billing_postal_code: data?.billing_postal_code,
+  //       billing_country: data?.billing_country,
+  //       callback_url: '',
+  //       // title: 'MR',
+  //       // phone: '08067268692',
+  //       // gender: 'M',
+  //       // billing_address:
+  //       //   // "No 5 chief Ezeani Dominic Str, km5 Eleyele Eruwa road Ibadan",
+  //       //   '333, Fremount Street',
+  //       // billing_city: 'San Francisco',
+  //       // billing_state: 'CA',
+  //       // billing_country: 'US',
+  //       // billing_postal_code: '94105',
+  //     };
 
-      //prepare data to send to flutterwave API
-      const testData = {
-        currency,
-        amount: Number(amount),
-        first_name: user?.firstName,
-        // first_name: 'Ezeani',
-        last_name: user?.lastName,
-        // last_name: 'Chucks',
-        // date_of_birth: user?.date_of_birth,
-        date_of_birth: '1991/01/06',
-        email: user?.email,
-        // email: 'concord_chucks2@yahoo.com',
-        billing_name: userName,
-        // billing_name: 'Ezeani Chucks',
-        title: data?.title,
-        phone: data?.phone,
-        gender: data?.gender,
-        billing_address: data?.billing_address,
-        billing_city: data?.billing_city,
-        billing_state: data?.billing_state,
-        billing_postal_code: data?.billing_postal_code,
-        billing_country: data?.billing_country,
-        callback_url: '',
-      };
-      
-      const url = `https://api.flutterwave.com/v3/virtual-cards`;
-      const options = {
-        method: 'POST',
-        url,
-        headers: {
-          Authorization: `Bearer ${process.env.FLUTTERWAVE_V3_SECRET_KEY}`,
-        },
-        body: testData,
-        json: true,
-      };
+  //     const url = `https://api.flutterwave.com/v3/virtual-cards`;
+  //     const options = {
+  //       method: 'POST',
+  //       url,
+  //       headers: {
+  //         Authorization: `Bearer ${process.env.FLUTTERWAVE_V3_SECRET_KEY}`,
+  //       },
+  //       body: testData,
+  //       json: true,
+  //     };
 
-      const virtual = this.virtualcard;
-      
-      await request(options, async (error: any, response: any) => {
-        try {
-          if (error) {
-            return res.status(400).json({
-              msg:
-                error.message || 'Something went wrong creating virtual cards',
-            });
-          }
+  //     const virtual = this.virtualcard;
 
-          if (response?.body?.status === 'error') {
-            return res
-              .status(400)
-              .json({ msg: 'unsuccessful', payload: response?.body?.message });
-          }
-          
-          const cardData = response?.body?.data;
-          
-          //create virtual card with cardData
-          await virtual.create({
-            userId,
-            userName,
-            cardData,
-          });
-          //get all virtual cards created by this user
-          const virtualcards = await virtual.find({ userId });
+  //     await request(options, async (error: any, response: any) => {
+  //       try {
+  //         if (error) {
+  //           return res.status(400).json({
+  //             msg:
+  //               error.message || 'Something went wrong creating virtual cards',
+  //           });
+  //         }
 
-           //decrease wallet
-           await this.payment.decreaseWallet(userId, Number(amount), currency);
-           
-           // create trx records
-           await this.payment.createWalletTransactions(
-             userId,
-             false,
-             'successful',
-             currency,
-             amount,
-             'In-app Transfer: Virtual card funding',
-             'In-app Transaction: Virtual card funding',
-           );
+  //         if (response?.body?.status === 'error') {
+  //           return res
+  //             .status(400)
+  //             .json({ msg: 'unsuccessful', payload: response?.body?.message });
+  //         }
 
-           await this.payment.createTransaction(
-             userId,
-             false,
-             `${(Math.random() * 10000).toFixed(0)}${Date.now()}`,
-             'successful',
-             currency,
-             amount,
-             {
-               email: user?.email,
-               phone_number: user?.phoneNumber,
-               name: `${user?.firstName} ${user?.lastName}`,
-             },
-             `charityapp${Date?.now()}${Math?.random()}`,
-             'In-app Transfer: Virtual Card Funding',
-             'In-app Transaction: Virtual Card Funding',
-             
-           );
-          
-          return res
-            .status(200)
-            .json({ msg: 'successful', payload: virtualcards });
-          // return res.status(200).json({
-          //   msg: 'successful',
-          //   payload: {
-          //     name: cardData?.name_on_card,
-          //     cvv: cardData?.cvv,
-          //     cardnumber: cardData?.card_pan,
-          //     cardtype: cardData?.card_type,
-          //     status: cardData?.status,
-          //     cardBalance: `${cardData?.currency} ${cardData?.balance}`,
-          //   },
-          // });
-        } catch (err) {
-          return res.status(500).json({ msg: err?.message });
-        }
-      });
-    } catch (err) {
-      return res.status(500).json({ msg: err?.message });
-    }
-  }
+  //         const cardData = response?.body?.data;
+
+  //         //create virtual card with cardData
+  //         await virtual.create({
+  //           userId,
+  //           userName,
+  //           cardData,
+  //         });
+  //         //get all virtual cards created by this user
+  //         const virtualcards = await virtual.find({ userId });
+
+  //         // create trx records
+  //         await this.payment.createWalletTransactions(
+  //           userId,
+  //           false,
+  //           'successful',
+  //           currency,
+  //           amount,
+  //           'In-app Transfer: Virtual card funding',
+  //           'In-app Transaction: Virtual card funding',
+  //         );
+
+  //         await this.payment.createTransaction(
+  //           userId,
+  //           false,
+  //           `${(Math.random() * 10000).toFixed(0)}${Date.now()}`,
+  //           'successful',
+  //           currency,
+  //           amount,
+  //           {
+  //             email: user?.email,
+  //             phone_number: user?.phoneNumber,
+  //             name: `${user?.firstName} ${user?.lastName}`,
+  //           },
+  //           `charityapp${Date?.now()}${Math?.random()}`,
+  //           'In-app Transfer: Virtual Card Funding',
+  //           'In-app Transaction: Virtual Card Funding',
+  //         );
+
+  //         return res
+  //           .status(200)
+  //           .json({ msg: 'successful', payload: virtualcards });
+  //         // return res.status(200).json({
+  //         //   msg: 'successful',
+  //         //   payload: {
+  //         //     name: cardData?.name_on_card,
+  //         //     cvv: cardData?.cvv,
+  //         //     cardnumber: cardData?.card_pan,
+  //         //     cardtype: cardData?.card_type,
+  //         //     status: cardData?.status,
+  //         //     cardBalance: `${cardData?.currency} ${cardData?.balance}`,
+  //         //   },
+  //         // });
+  //       } catch (err) {
+  //         return res.status(500).json({ msg: err?.message });
+  //       }
+  //     });
+  //   } catch (err) {
+  //     return res.status(500).json({ msg: err?.message });
+  //   }
+  // }
 
   async getAllUserCards({ userId, res }: { userId: string; res: Response }) {
     try {

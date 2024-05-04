@@ -12,6 +12,7 @@ import { CloudinaryModule } from 'src/cloudinary/cloudinary.module';
 import { accountValIntentSchema } from 'src/accountValidationIntent/accountValIntent.model';
 import { withdrawalIntentSchema } from 'src/withdrawalIntent/withdrawalIntent.model';
 import { vitualCardSchema } from 'src/virtualCardModule/virtualCardModel';
+import { vCIntentSchema } from 'src/createVirtualCardIntent/createVCIntent.model';
 
 @Module({
   imports: [
@@ -27,7 +28,7 @@ import { vitualCardSchema } from 'src/virtualCardModule/virtualCardModel';
       { name: 'withdrawalIntent', schema: withdrawalIntentSchema },
     ]),
     MongooseModule.forFeature([
-      { name: 'vCardIntent', schema: vitualCardSchema },
+      { name: 'vCardIntent', schema: vCIntentSchema },
     ]),
     forwardRef(() => PaymentModule),
     // PaymentModule,

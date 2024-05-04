@@ -8,22 +8,22 @@ import { BlockVirtualCardDTO, CreateVirtualCardDTO, DebitVirtualCardDTO, Destroy
 export class VirtualCardController {
   constructor(private virtualcardservice: VirtualCardServices) {}
 
-  @Post('create')
-  @ApiTags('VirtualCard')
-  async createVirtualCard(
-    @Body()
-    body: CreateVirtualCardDTO,
-    @Res() res: Response,
-  ) {
-    const { userId, amount, currency, data } = body;
-    return this.virtualcardservice.createVirtualCard({
-      userId,
-      amount,
-      currency,
-      data,
-      res,
-    });
-  }
+  // @Post('create')
+  // @ApiTags('VirtualCard')
+  // async createVirtualCard(
+  //   @Body()
+  //   body: CreateVirtualCardDTO,
+  //   @Res() res: Response,
+  // ) {
+  //   const { userId, amount, currency, data } = body;
+  //   return this.virtualcardservice.createVirtualCard({
+  //     userId,
+  //     amount,
+  //     currency,
+  //     data,
+  //     res,
+  //   });
+  // }
 
   //Get single virtual card
   @Get('get_cards/:userId')

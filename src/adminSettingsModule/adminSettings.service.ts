@@ -28,7 +28,9 @@ export class AdminSettingsService {
     @InjectModel('membership') private membership: Model<any>,
     @InjectModel('accountValIntent') private accountValIntent: Model<any>,
     @InjectModel('withdrawalIntent') private withdrawalIntent: Model<any>,
+    @InjectModel('virtualcard') private virtualcard: Model<any>,
     @InjectModel('vCardIntent') private vCardIntent: Model<any>,
+
     private paymentservice: PaymentService,
     private notificationservice: NotifService,
   ) {}
@@ -552,9 +554,7 @@ export class AdminSettingsService {
         'account_verification',
       );
 
-      const submissionDate = new Date(
-          intent?.createdAt,
-        ).toDateString()
+      const submissionDate = new Date(intent?.createdAt).toDateString();
 
       await sendEmail(
         user,
@@ -572,6 +572,379 @@ export class AdminSettingsService {
             return res.status(200).json({
               msg: 'success',
               payload: intentUpdated,
+            });
+          },
+          (err) => {
+            console.log('email err', err);
+            return res.status(400).json({ msg: 'unsuccessful', payload: err });
+          },
+        )
+        .catch((err) => {
+          return res.status(500).json({ msg: err?.message });
+        });
+    } catch (err) {
+      return res.status(500).json({ msg: err?.message });
+    }
+  }
+
+  //VIRTUAL CARD INTENTS
+  async fetchVirtualCardIntents({
+    intentStatus,
+    res,
+  }: {
+    intentStatus: 'awaiting' | 'processing' | 'attended' | 'cancelled';
+    res: Response;
+  }) {
+    try {
+      const intentStatus_enums = [
+        'awaiting',
+        'rejected',
+        'attended',
+        'cancelled',
+      ];
+      if (!intentStatus_enums.includes(intentStatus)) {
+        return res.status(400).json({
+          msg: "intent status can only be 'awaiting', 'rejected', 'attended' or 'cancelled'",
+        });
+      }
+      const userIntents = await this.vCardIntent.find({ intentStatus });
+      return res.status(201).json({ msg: 'successful', payload: userIntents });
+    } catch (err) {
+      return res.status(500).json({ msg: err?.message });
+    }
+  }
+
+  async acceptVirtualCardIntent({
+    userId,
+    intentId,
+    res,
+  }: {
+    userId: string;
+    intentId: string;
+    res: Response;
+  }) {
+    try {
+      const user = await this.user.findOne({ _id: userId });
+      if (!user) {
+        return res
+          .status(400)
+          .json('forbidden request. This user does not exist');
+      }
+
+      if (!user?.is_offically_verified) {
+        return res
+          .status(400)
+          .json(
+            'Unauthorized request. Please complete your account verification to proceed',
+          );
+      }
+      const intent = await this.vCardIntent.findOne({
+        userId,
+        _id: intentId,
+      });
+
+      if (!intent) {
+        return res
+          .status(400)
+          .json(
+            'This virtual card request does not exist. Please contact developer team for extra assistance',
+          );
+      }
+
+      if (intent?.intentStatus === 'cancelled') {
+        return res
+          .status(400)
+          .json(
+            'This virtual card request has been cancelled by user and should no longer be processed',
+          );
+      }
+
+      const amount = intent?.amount;
+      const currency = intent?.currency;
+      //amount to prefund virtual card with must not be lower than N100.
+      if (currency === 'NGN' && Number(amount) < 100) {
+        return res.status(400).json({
+          msg: 'unsuccessful',
+          payload:
+            'Amount to prefund new virtual card with cannot be lower than NGN 100',
+        });
+      }
+
+      const userName = `${user?.firstName} ${user?.lastName}`;
+
+      //prepare data to send to flutterwave API
+      const testData = {
+        currency,
+        amount: Number(amount),
+        first_name: user?.firstName,
+        // first_name: 'Ezeani',
+        last_name: user?.lastName,
+        // last_name: 'Chucks',
+        // date_of_birth: user?.date_of_birth,
+        date_of_birth: '1991/01/06',
+        email: user?.email,
+        // email: 'concord_chucks2@yahoo.com',
+        billing_name: userName,
+        // billing_name: 'Ezeani Chucks',
+        title: 'MR',
+        phone: user?.phoneNumber,
+        gender: 'M',
+        billing_address:
+          // "No 5 chief Ezeani Dominic Str, km5 Eleyele Eruwa road Ibadan",
+          '333, Fremount Street',
+        billing_city: 'San Francisco',
+        billing_state: 'CA',
+        billing_country: 'US',
+        billing_postal_code: '94105',
+        callback_url: '',
+      };
+
+      const url = `https://api.flutterwave.com/v3/virtual-cards`;
+      const options = {
+        method: 'POST',
+        url,
+        headers: {
+          Authorization: `Bearer ${process.env.FLUTTERWAVE_V3_SECRET_KEY}`,
+        },
+        body: testData,
+        json: true,
+      };
+
+      const virtual = this.virtualcard;
+
+      await request(options, async (error: any, response: any) => {
+        try {
+          if (error) {
+            return res.status(400).json({
+              msg:
+                error.message || 'Something went wrong creating virtual cards',
+            });
+          }
+
+          if (response?.body?.status === 'error') {
+            return res.status(400).json({
+              msg: 'unsuccessful',
+              payload: response?.body?.message,
+            });
+          }
+
+          const cardData = response?.body?.data;
+
+          //create virtual card with cardData
+          await virtual.create({
+            userId,
+            userName,
+            cardData,
+          });
+
+          await this.vCardIntent.findOneAndUpdate(
+            { userId, _id: intentId },
+            { intentStatus: 'attended' },
+            { new: true },
+          );
+
+          // create trx records
+          await this.paymentservice.createWalletTransactions(
+            userId,
+            false,
+            'successful',
+            currency,
+            amount,
+            'In-app Transfer: Virtual card funding',
+            'In-app Transaction: Virtual card funding',
+          );
+
+          await this.paymentservice.createTransaction(
+            userId,
+            false,
+            `${(Math.random() * 10000).toFixed(0)}${Date.now()}`,
+            'successful',
+            currency,
+            amount,
+            {
+              email: user?.email,
+              phone_number: user?.phoneNumber,
+              name: `${user?.firstName} ${user?.lastName}`,
+            },
+            `charityapp${Date?.now()}${Math?.random()}`,
+            'In-app Transfer: Virtual Card Funding',
+            'In-app Transaction: Virtual Card Creation debit',
+          );
+          await this.notificationservice.logSingleNotification(
+            `Congrats! Your virtual card creation request on ${new Date(
+              intent?.createdAt,
+            ).toDateString()} has been approved. Please click here for details.`,
+            user?._id,
+            '65c681387a7de5645968486f',
+            `${process.env.FRONT_END_CONNECTION}/user/${user?._id}`,
+            'virtual_card_creation',
+          );
+
+          const submissionDate = new Date(intent?.createdAt).toDateString();
+
+          await sendEmail(
+            user,
+            `
+            <div>
+            <h4>Congrats, ${user?.firstName} ${user?.lastName}! Your virtual card creation request submitted on ${submissionDate} has been approved</h4>
+            <h6>Click the button below to see the details on your profile</h6>
+            <button><a style='padding:5px; border-radius:10px;' href='${process.env.FRONT_END_CONNECTION}/user/${user?._id}'>Go to your profile</a></button>
+            </div>
+            `,
+          )
+            .then(
+              async (response) => {
+                //get all virtual cards created by this user
+                const virtualcards = await virtual.find({ userId });
+                return res
+                  .status(200)
+                  .json({ msg: 'successful', payload: virtualcards });
+              },
+
+              (err) => {
+                // console.log('email err', err);
+                return res
+                  .status(400)
+                  .json({ msg: 'unsuccessful', payload: err });
+              },
+            )
+            .catch((err) => {
+              return res.status(500).json({ msg: err?.message });
+            });
+
+          //   msg: 'successful',
+          //   payload: {
+          //     name: cardData?.name_on_card,
+          //     cvv: cardData?.cvv,
+          //     cardnumber: cardData?.card_pan,
+          //     cardtype: cardData?.card_type,
+          //     status: cardData?.status,
+          //     cardBalance: `${cardData?.currency} ${cardData?.balance}`,
+          //   },
+          // });
+        } catch (err) {
+          return res.status(500).json({ msg: err?.message });
+        }
+      });
+    } catch (err) {
+      return res.status(500).json({ msg: err?.message });
+    }
+  }
+
+  async rejectVirtualCardIntent({
+    userId,
+    intentId,
+    dissatisfaction_reason,
+    res,
+  }: {
+    userId: string;
+    intentId: string;
+    dissatisfaction_reason: string;
+    res: Response;
+  }) {
+    try {
+      //create flutterwave withdrawal request here
+      const user = await this.user.findOne({ _id: userId });
+      if (!user) {
+        return res
+          .status(400)
+          .json('forbidden request. This user doen not exist');
+      }
+
+      const intent = await this.vCardIntent.findOne({
+        userId,
+        _id: intentId,
+      });
+
+      if (!intent) {
+        return res
+          .status(400)
+          .json(
+            'This withdrawal request does not exist. Please contact developer team for extra assistance',
+          );
+      }
+
+      if (intent?.intentStatus === 'cancelled') {
+        return res
+          .status(400)
+          .json(
+            'This withdrawl request has been cancelled by user and should no longer be processed',
+          );
+      }
+
+      //refund the user
+      await this.paymentservice.increaseWallet(
+        user?._id,
+        Number(intent.amount),
+        intent?.currency,
+        'wallet refund from admin rejection',
+      );
+
+      await this.paymentservice.createWalletTransactions(
+        userId,
+        true,
+        'successful',
+        intent?.currency,
+        Number(intent?.amount),
+        'Wallet Refund',
+        'Wallet refund from vitual card request rejection',
+      );
+
+      await this.paymentservice.createTransaction(
+        userId,
+        true,
+        intentId,
+        'successful',
+        intent?.currency,
+        Number(intent?.amount),
+        {
+          email: user?.email,
+          phone_number: user?.phoneNumber,
+          name: `${user?.firstName} ${user?.lastName}`,
+        },
+        `charityapp${Date.now()}${Math.random()}`,
+        'Wallet Refund: Bank credit transfer',
+        'Wallet refund from vitual card request rejection',
+        'inapp',
+      );
+
+      //update withdrawal intent to show rejection
+      await this.vCardIntent.findOneAndUpdate(
+        { userId, _id: intentId },
+        { intentStatus: 'rejected', dissatisfaction_reason },
+        { new: true },
+      );
+
+      const vCardIntentLogs = await this.vCardIntent.find({ userId });
+
+      await this.notificationservice.logSingleNotification(
+        `We cannot process your virtual card request submitted by you on ${new Date(
+          intent?.createdAt,
+        ).toDateString()}. Please click here for details.`,
+        user?._id,
+        '65c681387a7de5645968486f',
+        `${process.env.FRONT_END_CONNECTION}/user/${user?._id}`,
+        'virtual_card_creation',
+      );
+
+      const submissionDate = new Date(intent?.createdAt).toDateString();
+
+      await sendEmail(
+        user,
+        `
+          <div>
+            <h4>Hey ${user?.firstName} ${user?.lastName}, we cannot process the virtual card creation request you submitted on ${submissionDate}</h4>
+            <h5>Reason: ${dissatisfaction_reason}</h5>
+            <h6>Click the button below to see the details on your profile</h6>
+            <button><a style='padding:5px; border-radius:10px;' href='${process.env.FRONT_END_CONNECTION}/user/${user?._id}'>Go to your profile</a></button>
+            </div>
+        `,
+      )
+        .then(
+          (response) => {
+            return res.status(200).json({
+              msg: 'success',
+              payload: vCardIntentLogs,
             });
           },
           (err) => {

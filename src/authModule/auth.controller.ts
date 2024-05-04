@@ -250,6 +250,47 @@ export class AuthController {
     });
   }
 
+  @Post('auth/create_virtual_card_intent')
+  @ApiTags('Auth')
+  async createVirtualCardIntent(
+    @Body() body: WithdrawalIntentDTO,
+    @Res() res: Response,
+  ) {
+    const { userId, userName } = body;
+    return await this.authservice.createVirtualCardIntent({
+      userId,
+      userName,
+      res,
+    });
+  }
+
+  @Post('auth/fetch_virtual_card_intents')
+  @ApiTags('Auth')
+  async fetchSingleUserVirtualCardIntents(
+    @Body() body: WithdrawalIntentDTO,
+    @Res() res: Response,
+  ) {
+    const { userId } = body;
+    return this.authservice.fetchSingleUserVirtualCardIntents({
+      userId,
+      res,
+    });
+  }
+
+  @Post('auth/cancel_virtual_card_intent')
+  @ApiTags('Auth')
+  async cancelUserVirtualCardIntent(
+    @Body() body: WithdrawalIntentDTO,
+    @Res() res: Response,
+  ) {
+    const { userId, intentId } = body;
+    return this.authservice.cancelUserVirtualCardIntent({
+      userId,
+      intentId,
+      res,
+    });
+  }
+
   @Post('auth/editUserSubType')
   @ApiTags('Auth')
   editUserSubType(@Body() body: EditUserSubTypeDTO) {

@@ -2,12 +2,12 @@ import { Module } from '@nestjs/common';
 import { CreeateVCIntentController } from './creeateVCIntent.controller';
 import { CreeateVCIntentService } from './creeateVCIntent.service';
 import { MongooseModule } from '@nestjs/mongoose';
-import { createVCIntentSchema } from './createVCIntent.model';
+import { vCIntentSchema } from './createVCIntent.model';
 
 @Module({
   imports: [
     MongooseModule.forFeature([
-      { name: 'createVCIntent', schema: createVCIntentSchema },
+      { name: 'vCardIntent', schema: vCIntentSchema },
     ]),
   ],
   controllers: [CreeateVCIntentController],
