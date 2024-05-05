@@ -338,6 +338,36 @@ export class EventsServices {
       return res.status(500).json({ msg: err?.message });
     }
   }
+  async editEventTags(
+    eventTags: string[],
+    eventId: string,
+    userId: string,
+    res: Response,
+  ) {
+    try {
+      const userOwnsEvent = await this.event.findOne({ creatorId: userId });
+      if (!userOwnsEvent) {
+        return res
+          .status(400)
+          .json({ msg: 'Forbidden request. You can not perform this action' });
+      }
+      const eventExists = await this.event.findOne({ _id: eventId });
+      if (!eventExists) {
+        return res.status(400).json({
+          msg: 'Event cannot be found. Check that you have not deleted it.',
+        });
+      }
+
+      const eventEdited = await this.event.findOneAndUpdate(
+        { _id: eventId, creatorId: userId },
+        { $set: { eventTags } },
+        { new: true },
+      );
+      return res.status(200).json({ msg: 'Success', event: eventEdited });
+    } catch (err) {
+      return res.status(500).json({ msg: err?.message });
+    }
+  }
 
   async addCommentOnEvent(
     eventId: string,

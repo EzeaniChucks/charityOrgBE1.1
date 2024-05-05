@@ -65,6 +65,16 @@ export class EventsController {
     return this.eventservice.createEvent(file, JSON.parse(document), res);
   }
 
+  @Put('edit_event_tags')
+  @ApiTags('Events')
+  editEventTags(
+    @Body() body: { eventId: string; userId: string; eventTags: string[] },
+    @Res() res: Response,
+  ) {
+    const { eventId, userId, eventTags } = body;
+    return this.eventservice.editEventTags(eventTags, eventId, userId, res);
+  }
+
   @Put('add_comment_on_event')
   @ApiTags('Events')
   addCommmentOnEvent(@Body() body: AddEventCommentDTO, @Res() res: Response) {
