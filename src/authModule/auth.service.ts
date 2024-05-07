@@ -95,7 +95,7 @@ export class AuthService {
       const isPassCorrect = await bcrypt.compare(password, user.password);
       if (isPassCorrect) {
         if (user?.isVerified) {
-          const { _id, email, isAdmin } = user;
+          const { _id, email, isAdmin, firstName, lastName } = user;
 
           const token = await jwt.sign(
             {
@@ -115,6 +115,8 @@ export class AuthService {
               _id,
               email,
               token,
+              firstName,
+              lastName
             },
           });
         } else {
@@ -261,12 +263,14 @@ export class AuthService {
         { _id: userId },
         { $set: { verificationToken } },
       );
-      const { _id, email, isAdmin } = user;
+      const { _id, email, isAdmin, firstName, lastName } = user;
       const token = await jwt.sign(
         {
           _id,
           email,
           isAdmin,
+          firstName,
+          lastName,
         },
         process.env.JWT_SECRET,
         {
@@ -503,13 +507,13 @@ export class AuthService {
       });
       if (accountBankVerified) {
         extraObjects['idValidationStatus'] =
-          accountValidationStatus.intentStatus;
+          accountValidationStatus?.intentStatus;
         if (
-          accountValidationStatus.intentStatus === 'attended' &&
+          accountValidationStatus?.intentStatus === 'attended' &&
           !is_offically_verified
         ) {
           extraObjects['dissatisfaction_reason'] =
-            accountValidationStatus.dissatisfaction_reason;
+            accountValidationStatus?.dissatisfaction_reason;
         }
       }
       return res.status(200).json({

@@ -886,7 +886,7 @@ export class AdminSettingsService {
         'successful',
         intent?.currency,
         Number(intent?.amount),
-        'Wallet Refund',
+        'Wallet Refund: Virtual Card Creation',
         'Wallet refund from vitual card request rejection',
       );
 
@@ -903,8 +903,8 @@ export class AdminSettingsService {
           name: `${user?.firstName} ${user?.lastName}`,
         },
         `charityapp${Date.now()}${Math.random()}`,
-        'Wallet Refund: Bank credit transfer',
-        'Wallet refund from vitual card request rejection',
+        'Wallet Refund: Virtual Card Creation',
+        'Wallet refund from virtual card request rejection',
         'inapp',
       );
 

@@ -138,21 +138,6 @@ export class AuthController {
     return this.authservice.searchUser(searchWord, res);
   }
 
-  // @Post('auth/editUserSubType')
-  // @ApiTags('Auth')
-  // editUserSubType(@Body() body: any) {
-  //   const { subType, userId } = body;
-  //   return this.authservice.editUserSubscriptiontype({ subType, userId });
-  // }
-
-  // @Post('auth/editUserBundleAmount')
-  // @ApiTags('Auth')
-  // editUserBundleAmount(@Body() body: any) {
-  //   // const { userId, bundle_type_variable, bundle_quantity_to_buy } = body;
-  //   const { userId, frontendBundleName } = body;
-  //   return this.authservice.editUserBundleAmount(userId, frontendBundleName);
-  // }
-
   @Post('auth/edit_user_details')
   @ApiTags('Auth')
   @UseInterceptors(FileInterceptor('profilePic'))
