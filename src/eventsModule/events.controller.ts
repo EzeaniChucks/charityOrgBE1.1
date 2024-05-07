@@ -56,12 +56,6 @@ export class EventsController {
   ) {
     // console.log(file, body);
     const { document } = body;
-    // if (!file) {
-    //   return res.status(400).json({
-    //     msg: 'unsuccessful',
-    //     payload: 'Please upload an image to your charity',
-    //   });
-    // }
     return this.eventservice.createEvent(file, JSON.parse(document), res);
   }
 

@@ -1954,14 +1954,14 @@ export class EventsServices {
         escrowCompletionStatus,
       } = await totalPtAndAmountDonated(event);
 
-      if (paymentformlength > 0 && totalPayout === 0) {
+      if (paymentformlength > 0 && totalPayout <= 0) {
         return res.status(400).json({
           msg: 'unsuccessful',
-          payload: 'Total payout cannot be zero.',
+          payload: 'Total payout cannot be zero or less.',
         });
       }
 
-      if (paymentformlength > 0 && Number(amountDonated) === 0) {
+      if (paymentformlength > 0 && Number(amountDonated) <= 0) {
         //in case it has been done, set escrow paidOut to true
         await markEscrowAsComplete(eventId, escrowId);
         //then return error message indicating total amount given to escrow has been out
@@ -2021,6 +2021,7 @@ export class EventsServices {
           );
           // console.log('userisonpayForm', userIsOnDatabasePaymentForm);
 
+          let name = `${user.firstName} ${user.lastName}`;
           let adduserToPaymentForm;
 
           if (userIsOnDatabasePaymentForm) {
@@ -2033,6 +2034,19 @@ export class EventsServices {
                     Number(amount), // Increment the amount_received by the specified amount
                   'escrow.$[outer].appointer.money_left_after_disbursement':
                     -Number(amount), // Decrement the money_left_after_disbursement by the specified amount
+                },
+                $push: {
+                  contributors: {
+                    userId,
+                    name,
+                    actualName: name,
+                    note: `Recurrent payment received from ${
+                      name || 'Anonymous'
+                    }
+                    }`,
+                    amount,
+                    date: Date.now(),
+                  },
                 },
               },
               {
@@ -2053,6 +2067,17 @@ export class EventsServices {
                     userId,
                     amount_received: amount,
                     paid: true,
+                  },
+                  contributors: {
+                    userId,
+                    name,
+                    actualName: name,
+                    note: `Recurrent payment received from ${
+                      name || 'Anonymous'
+                    }
+                    }`,
+                    amount,
+                    date: Date.now(),
                   },
                 },
                 $inc: {
