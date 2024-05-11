@@ -338,11 +338,14 @@ export class EventsServices {
       return res.status(500).json({ msg: err?.message });
     }
   }
-  async editEventTags(
-    eventTags: string[],
+  async editEventDetails(
     eventId: string,
     userId: string,
+    type: 'tag' | 'description' | 'amount',
     res: Response,
+    eventTags?: string[],
+    description?:string,
+    amount?:number,
   ) {
     try {
       const userOwnsEvent = await this.event.findOne({ creatorId: userId });
@@ -357,12 +360,29 @@ export class EventsServices {
           msg: 'Event cannot be found. Check that you have not deleted it.',
         });
       }
+      let eventEdited;
+      if (type === 'tag') {
+        eventEdited = await this.event.findOneAndUpdate(
+          { _id: eventId, creatorId: userId },
+          { $set: { eventTags } },
+          { new: true },
+        );
+      }
+      if (type === 'description') {
+        eventEdited = await this.event.findOneAndUpdate(
+          { _id: eventId, creatorId: userId },
+          { $set: { eventDescription:description } },
+          { new: true },
+        );
+      }
+      if (type === 'amount') {
+        eventEdited = await this.event.findOneAndUpdate(
+          { _id: eventId, creatorId: userId },
+          { $set: { eventAmountExpected: Number(amount) } },
+          { new: true },
+        );
+      }
 
-      const eventEdited = await this.event.findOneAndUpdate(
-        { _id: eventId, creatorId: userId },
-        { $set: { eventTags } },
-        { new: true },
-      );
       return res.status(200).json({ msg: 'Success', event: eventEdited });
     } catch (err) {
       return res.status(500).json({ msg: err?.message });

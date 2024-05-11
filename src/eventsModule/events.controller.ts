@@ -59,14 +59,30 @@ export class EventsController {
     return this.eventservice.createEvent(file, JSON.parse(document), res);
   }
 
-  @Put('edit_event_tags')
+  @Put('edit_event_details')
   @ApiTags('Events')
-  editEventTags(
-    @Body() body: { eventId: string; userId: string; eventTags: string[] },
+  editEventDetails(
+    @Body()
+    body: {
+      eventId: string;
+      userId: string;
+      eventTags: string[];
+      description: string;
+      amount: number;
+      type: 'amount' | 'tag' | 'description';
+    },
     @Res() res: Response,
   ) {
-    const { eventId, userId, eventTags } = body;
-    return this.eventservice.editEventTags(eventTags, eventId, userId, res);
+    const { eventId, userId, eventTags, description, amount, type } = body;
+    return this.eventservice.editEventDetails(
+      eventId,
+      userId,
+      type,
+      res,
+      eventTags,
+      description,
+      amount,
+    );
   }
 
   @Put('add_comment_on_event')
