@@ -89,4 +89,17 @@ export const userSchema = new mongoose.Schema({
       ],
     },
   ],
+  my_pledges: [
+    {
+      eventId: { type: mongoose.Schema.Types.ObjectId },
+      eventName: { type: String },
+      pledge_description: { type: String, default: '' },
+      pledge_status: {
+        type: String,
+        enum: ['pending', 'redeemed'],
+        default: 'pending',
+      },
+      redemption_date: Date,
+    },
+  ],
 });

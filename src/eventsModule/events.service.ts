@@ -533,8 +533,8 @@ export class EventsServices {
       // total_income_from_events: { type: Number, default: 0 },
       // total_income_from_events_percent_inc: { type: Number, default: 0 },
       const status = 'successful';
-      const description = 'Wallet Withdraw: Charity funding';
-      const narration = 'Wallet Withdraw: Charity Funding';
+      const description = 'Event Donation';
+      const narration = 'Event Donation';
       const tx_ref = `charityapp${Date.now()}${Math.random()}`;
       const customer = {
         email: user?.email,
@@ -718,7 +718,7 @@ export class EventsServices {
       );
       await this.Wallet.decreaseWallet(userId, amount, event?.currency);
       const status = 'successful';
-      const description = 'Wallet Withdraw';
+      const description = 'Charity Funding';
       const narration = 'In-app Transaction: Charity funding';
       const tx_ref = `charityapp${Date.now()}${Math.random()}`;
       const customer = {
@@ -1196,7 +1196,6 @@ export class EventsServices {
       }
       //pull out event and event details object
       let event = await this.event.findOne({ _id: eventId });
-      const user = await this.user.findOne({ _id: userId });
       if (!event) {
         return res.status(400).json({
           msg: 'Event detail or event does not seem to exist. Contact customer support',
@@ -1224,6 +1223,21 @@ export class EventsServices {
           },
         },
         { new: true },
+      );
+
+      await this.user.findOneAndUpdate(
+        { _id: userId },
+        {
+          $push: {
+            my_pledges: {
+              eventId,
+              eventName: event?.eventName,
+              pledge_description,
+              pledge_status: 'pending',
+              redemption_date,
+            },
+          },
+        },
       );
 
       return res.status(200).json({ msg: 'success', payload: event });
@@ -1814,7 +1828,7 @@ export class EventsServices {
         'successful',
         currency,
         amount,
-        'In-app Transfer: Escrow payment',
+        'Escrow payment',
         'In-app Transaction: Escrow payment',
       );
       await this.Wallet.createTransaction(
@@ -1830,7 +1844,7 @@ export class EventsServices {
           name: `${user?.firstName} ${user?.lastName}`,
         },
         `charityapp${Date?.now()}${Math?.random()}`,
-        'In-app Transfer: Escrow payment',
+        'Escrow payment',
         'In-app Transaction: Escrow payment',
         'inapp_escrow',
         null,
@@ -2091,15 +2105,20 @@ export class EventsServices {
             const currency = event?.currency;
             if (adduserToPaymentForm) {
               await this.Wallet.validateUserWallet(userId);
-              await this.Wallet.increaseWallet(userId, amount, currency, null);
+              await this.Wallet.increaseWallet(
+                userId,
+                amount,
+                currency,
+                'event',
+              );
               await this.Wallet.createWalletTransactions(
                 userId,
                 true,
                 'successful',
                 currency,
                 amount,
-                'Wallet Top-up: Escrow payment',
-                'In-app Transaction: Escrow payment',
+                'Escrow credit',
+                'In-app Transaction: Credit received from escrow',
               );
               await this.Wallet.createTransaction(
                 userId,
@@ -2114,8 +2133,8 @@ export class EventsServices {
                   name: `${user?.firstName} ${user?.lastName}`,
                 },
                 `charityapp${Date?.now()}${Math?.random()}`,
-                'Wallet Top-up: Escrow payment',
-                'In-app Transaction: Escrow payment',
+                'Escrow credit',
+                'In-app Transaction: Credit received from escrow',
                 'inapp_escrow',
                 null,
                 {

@@ -475,6 +475,7 @@ export class AuthService {
         subscription,
         bundle,
         country,
+        my_pledges,
       } = user;
 
       if (decodedUser._id.toString() !== userId && !decodedUser.isAdmin) {
@@ -534,6 +535,7 @@ export class AuthService {
           isAdmin,
           subscription,
           bundle,
+          my_pledges,
         },
       });
     } catch (err) {

@@ -241,6 +241,9 @@ export class PaymentService {
       }
 
       let wallet = undefined;
+      let previous_total_income_from_events_percent_inc =
+        particularCurrency?.total_income_from_events_percent_inc;
+
       if (transactionType) {
         wallet = await this.wallet.findOneAndUpdate(
           { userId, 'currencies.currency_type': currency },
@@ -248,9 +251,16 @@ export class PaymentService {
             $inc: {
               'currencies.$.balance': Number(amount).toFixed(2),
               'currencies.$.total_topup': amount,
+              'currencies.$.total_income_from_events':
+                transactionType === 'event' ? amount : 0,
             },
             $set: {
               'currencies.$.total_topup_percent_inc': percent_inc.toFixed(3),
+              'currencies.$.total_income_from_events_percent_inc':
+                transactionType === 'event'
+                  ? (Number(amount) * 100) /
+                    Number(particularCurrency?.total_income_from_events)
+                  : previous_total_income_from_events_percent_inc,
             },
           },
           { new: true },
@@ -864,7 +874,7 @@ export class PaymentService {
         'successful',
         'amount deposited to bank',
       );
-      
+
       await this.withdrawalIntent.findOneAndUpdate(
         { userId: meta?.beneficiary_id, _id: meta?.intentId },
         { intentStatus: 'attended' },
@@ -1515,12 +1525,10 @@ export class PaymentService {
         // console.log(response.body);
         const result = response.body;
         if (result.status === false) {
-          return res
-            .status(400)
-            .json({
-              msg: result?.message,
-              payload: `${result?.message} ${result?.meta?.nextStep}`,
-            });
+          return res.status(400).json({
+            msg: result?.message,
+            payload: `${result?.message} ${result?.meta?.nextStep}`,
+          });
         }
         return res.status(200).json({
           msg: 'successful',
@@ -1551,6 +1559,7 @@ export class PaymentService {
               accountBankCode: identification?.bank_code,
               accountNumber: user?.accountTempInfo?.account_number,
               accountBank: user?.accountTempInfo?.account_bank,
+              accountName: `${user?.accountTempInfo?.legal_first_name} ${user?.accountTempInfo?.legal_last_name}`,
               bvn: user?.accountTempInfo?.bvn,
               accountBankVerified: true,
             },
